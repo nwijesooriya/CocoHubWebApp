@@ -169,7 +169,7 @@ function ManageUsers() {
                     <option value="Delivery Person">Delivery</option>
                     </select>
                 </td>
-                <td>{user.dob || "-"}</td>
+                <td>{user.dob ? user.dob.split("T")[0] : "-"}</td>
                 <td>{user.gender || "-"}</td>
                 <td>
                     <button
