@@ -34,11 +34,13 @@ mongoose.connect(URL)
 // Import Routes
 const feedbackRouter = require("./routes/feedbacks");
 const userRouter = require("./routes/users");
+const cloudinaryRouter = require("./routes/cloudinaryRoutes");
 
 // Use Routes
 app.use("/feedback", feedbackRouter);
 app.use("/user", userRouter);
 app.use("/api/auth", authRoutes);
+app.use("/api/cloudinary", cloudinaryRouter);
 
 // Start Server
 app.listen(PORT, () => {
