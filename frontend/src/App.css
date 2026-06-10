@@ -1022,6 +1022,60 @@ h1,h2,h3,h4,h5,h6 { font-family: var(--font-heading); font-weight: 700; }
   box-shadow: 0 6px 18px rgba(5,150,105,0.35);
 }
 
+.profile-action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0.5rem 0 1.2rem;
+  width: 100%;
+  max-width: 180px;
+}
+
+.save-changes-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #059669, #10b981);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  transition: var(--transition);
+}
+
+.save-changes-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  filter: brightness(1.1);
+}
+
+.cancel-changes-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0.55rem 1.2rem;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+  background: rgba(255,255,255,0.15);
+  transition: var(--transition);
+}
+
+.cancel-changes-button:hover {
+  background: rgba(255,255,255,0.25);
+  transform: translateY(-1px);
+}
+
+
 .role-text {
   font-size: 0.88rem; opacity: 0.88;
   font-weight: 500;

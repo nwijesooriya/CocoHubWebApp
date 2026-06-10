@@ -228,16 +228,7 @@ function UserProfile() {
       )}
 
       <div className="image-edit-overlay">
-        {isEditingImage ? (
-          <>
-            <button className="save-button" onClick={handleSaveImage}>
-              <FaSave />
-            </button>
-            <button className="cancel-button" onClick={handleCancelEdit}>
-              <FaTimes />
-            </button>
-          </>
-        ) : (
+        {!isEditingImage && (
           <label htmlFor="profileImageInput" className="edit-button">
             <FaEdit />
           </label>
@@ -246,6 +237,7 @@ function UserProfile() {
 
       <input
         type="file"
+        id="profileImageInput"
         ref={fileInputRef}
         accept="image/*"
         onChange={handleImageChange}
@@ -255,13 +247,33 @@ function UserProfile() {
 
 
         <h3 className="profile-name">{userData.name}</h3>
-        <button
-          type="button"
-          className="profile-upload-button"
-          onClick={handleAddProfileImage}
-        >
-          Add Profile Image
-        </button>
+        
+        {isEditingImage ? (
+          <div className="profile-action-buttons">
+            <button
+              type="button"
+              className="save-changes-button"
+              onClick={handleSaveImage}
+            >
+              <FaSave /> Save Photo
+            </button>
+            <button
+              type="button"
+              className="cancel-changes-button"
+              onClick={handleCancelEdit}
+            >
+              <FaTimes /> Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="profile-upload-button"
+            onClick={handleAddProfileImage}
+          >
+            Update Profile Photo
+          </button>
+        )}
         <p className="role-text">{userData.expectedRole || "Role not defined"}</p>
         <div className="social-icons">
           <FaFacebookF />
