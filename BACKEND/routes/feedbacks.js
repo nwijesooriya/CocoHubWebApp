@@ -22,13 +22,13 @@ router.route("/add").post(async (req, res) => {
       const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
-          user: 'cocohub876@gmail.com',    // 👈 Replace here
-          pass: 'rkzg anvh dzds onau'                // 👈 Replace with Gmail App Password
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS
         }
       });
   
       const mailOptions = {
-        from: 'cocohub876@gmail.com',
+        from: process.env.EMAIL_USER,
         to: email,
         subject: 'Thank You for Your Feedback! 🌴',
         html: `
