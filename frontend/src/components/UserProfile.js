@@ -1,5 +1,5 @@
 // UserProfile.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Swal from 'sweetalert2';
@@ -33,6 +33,7 @@ function UserProfile() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [isEditingImage, setIsEditingImage] = useState(false);
+  const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -79,6 +80,11 @@ function UserProfile() {
   const handleCancelEdit = () => {
     setEditField("");
     setError("");
+    if (selectedImage || isEditingImage) {
+      setSelectedImage(null);
+      setIsEditingImage(false);
+      setImagePreviewUrl(userData.profileImage || null);
+    }
   };
 
   const handleImageChange = (event) => {
@@ -89,6 +95,13 @@ function UserProfile() {
       setIsEditingImage(true); // 👈 important to trigger button appearance
     }
   };  
+
+  const handleAddProfileImage = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  };
 
   const handleSaveImage = async () => {
     if (!selectedImage) {
@@ -101,11 +114,7 @@ function UserProfile() {
     formData.append("userId", userId);
 
     try {
-      const response = await axios.post("http://localhost:8000/user/upload-image", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      const response = await axios.post("http://localhost:8000/user/upload-image", formData);
 
       if (response.data.imageUrl) {
         const fullImageUrl = response.data.imageUrl.startsWith('http')
@@ -114,6 +123,7 @@ function UserProfile() {
         setUserData((prev) => ({ ...prev, profileImage: fullImageUrl }));
         setImagePreviewUrl(fullImageUrl);
         setSelectedImage(null);
+        setIsEditingImage(false);
         setError("");
         Swal.fire({
           icon: 'success',
@@ -236,7 +246,7 @@ function UserProfile() {
 
       <input
         type="file"
-        id="profileImageInput"
+        ref={fileInputRef}
         accept="image/*"
         onChange={handleImageChange}
         style={{ display: "none" }}
@@ -245,6 +255,13 @@ function UserProfile() {
 
 
         <h3 className="profile-name">{userData.name}</h3>
+        <button
+          type="button"
+          className="profile-upload-button"
+          onClick={handleAddProfileImage}
+        >
+          Add Profile Image
+        </button>
         <p className="role-text">{userData.expectedRole || "Role not defined"}</p>
         <div className="social-icons">
           <FaFacebookF />

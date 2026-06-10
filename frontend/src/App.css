@@ -1000,6 +1000,28 @@ h1,h2,h3,h4,h5,h6 { font-family: var(--font-heading); font-weight: 700; }
 
 .profile-name { font-family: var(--font-heading); font-size: 1.5rem; font-weight: 700; margin: 0.7rem 0 0.2rem; }
 
+.profile-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0.25rem 0 0.8rem;
+  padding: 0.55rem 1rem;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+  box-shadow: 0 4px 14px rgba(5,150,105,0.25);
+  transition: var(--transition);
+}
+
+.profile-upload-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(5,150,105,0.35);
+}
+
 .role-text {
   font-size: 0.88rem; opacity: 0.88;
   font-weight: 500;
