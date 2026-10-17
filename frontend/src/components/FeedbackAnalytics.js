@@ -1,121 +1,165 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
+import React, { useEffect, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
-import '../App.css';
+import api, { apiError } from "../api";
+import { PageHeader, Notice, Loading } from "./UI";
+import { productLabel } from "./AddFeedback";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
-
 const COLORS = [
-    "#059669","#10b981","#34d399","#f59e0b","#8b5cf6",
-    "#3b82f6","#ef4444","#ec4899","#f97316","#14b8a6"
+  "#245c43",
+  "#8eac78",
+  "#b6894a",
+  "#577b73",
+  "#c8bb8a",
+  "#785c46",
+  "#a8b59e",
+  "#758e54",
+  "#bf956f",
 ];
 
-function FeedbackAnalytics() {
-    const [feedbacks, setFeedbacks] = useState([]);
-    const [loading, setLoading]     = useState(true);
-
-    useEffect(() => {
-        axios.get("http://localhost:8000/feedback/")
-            .then((res) => { setFeedbacks(res.data); setLoading(false); })
-            .catch((err) => { console.error(err); setLoading(false); });
-    }, []);
-
-    const productCounts = {};
-    feedbacks.forEach((fb) => {
-        if (fb.productItem) productCounts[fb.productItem] = (productCounts[fb.productItem] || 0) + 1;
-    });
-
-    const avgRating = feedbacks.length
-        ? (feedbacks.reduce((sum, fb) => sum + (fb.rating || 0), 0) / feedbacks.length).toFixed(1)
-        : 0;
-
-    const data = {
-        labels: Object.keys(productCounts),
-        datasets: [{
-            label: "Feedbacks",
-            data: Object.values(productCounts),
-            backgroundColor: COLORS,
-            borderColor: "#ffffff",
-            borderWidth: 3,
-            hoverOffset: 12,
-        }],
-    };
-
-    const options = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: "right",
-                labels: { boxWidth: 14, padding: 18, font: { family: 'Inter, sans-serif', size: 13 } }
-            },
-            tooltip: { enabled: true },
+export default function FeedbackAnalytics() {
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await api.get("/feedback/");
+      setFeedbacks(res.data);
+    } catch (err) {
+      setError(apiError(err, "We could not load analytics. Please try again."));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const counts = {};
+  feedbacks.forEach((f) => {
+    if (f.productItem) counts[f.productItem] = (counts[f.productItem] || 0) + 1;
+  });
+  const average = feedbacks.length
+    ? (
+        feedbacks.reduce((sum, f) => sum + (Number(f.rating) || 0), 0) /
+        feedbacks.length
+      ).toFixed(1)
+    : "—";
+  const data = {
+    labels: Object.keys(counts).map(productLabel),
+    datasets: [
+      {
+        label: "Reviews",
+        data: Object.values(counts),
+        backgroundColor: COLORS,
+        borderColor: "#f8f7f2",
+        borderWidth: 3,
+        hoverOffset: 8,
+      },
+    ],
+  };
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "bottom",
+        labels: {
+          color: "#788875",
+          boxWidth: 12,
+          padding: 16,
+          font: { family: "Inter, sans-serif", size: 11 },
         },
-        animation: { animateRotate: true, animateScale: true },
-    };
-
-    const stats = [
-        { label: 'Total Reviews', value: feedbacks.length, icon: '💬', color: '#059669' },
-        { label: 'Avg Rating',    value: `${avgRating} ★`, icon: '⭐', color: '#f59e0b' },
-        { label: 'Products',      value: Object.keys(productCounts).length, icon: '🥥', color: '#8b5cf6' },
-    ];
-
-    return (
-        <div className="analytics-container">
-            <h1 className="feedback-title" style={{ marginBottom: '0.3rem' }}>📈 Feedback Analytics</h1>
-            <p style={{ color: '#6b7280', marginBottom: '2rem', fontSize: '0.9rem' }}>
-                Distribution of customer reviews across product categories
-            </p>
-
-            {/* Stats Row */}
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '2rem' }}>
-                {stats.map(s => (
-                    <div key={s.label} style={{
-                        background: 'rgba(255,255,255,0.88)',
-                        backdropFilter: 'blur(12px)',
-                        border: `1.5px solid ${s.color}25`,
-                        borderRadius: 14, padding: '1.2rem 2rem',
-                        textAlign: 'center', minWidth: 120,
-                        boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-                        flex: 1, maxWidth: 180
-                    }}>
-                        <div style={{ fontSize: '1.8rem', marginBottom: '0.3rem' }}>{s.icon}</div>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 800, fontSize: '1.5rem', color: s.color }}>{s.value}</div>
-                        <div style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: 500 }}>{s.label}</div>
-                    </div>
-                ))}
-            </div>
-
-            <div className="analytics-wrapper">
-                <p className="analytics-description">
-                    The chart below shows the number of feedbacks received for each product category.
+      },
+    },
+  };
+  return (
+    <div className="analytics-container">
+      <PageHeader
+        eyebrow="Listen. Learn. Grow."
+        title="A closer look at feedback."
+        description="See how customer reviews are distributed across the product range."
+      >
+        <Link className="btn btn-secondary" to="/feedback">
+          Back to feedback
+        </Link>
+      </PageHeader>
+      {loading ? (
+        <Loading text="Preparing feedback insights…" />
+      ) : error ? (
+        <>
+          <Notice>{error}</Notice>
+          <button className="btn btn-secondary" onClick={load}>
+            Try again
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="analytics-stats">
+            {[
+              { label: "Total reviews", value: feedbacks.length },
+              { label: "Average rating / 5", value: average },
+              { label: "Products reviewed", value: Object.keys(counts).length },
+            ].map((stat) => (
+              <div className="surface stat-card" key={stat.label}>
+                <strong>{stat.value}</strong>
+                <span>{stat.label}</span>
+              </div>
+            ))}
+          </div>
+          <section className="surface analytics-wrapper">
+            <div className="card-heading">
+              <div>
+                <h2>Reviews by product</h2>
+                <p>
+                  Each segment represents the number of reviews for a product.
                 </p>
-
-                {loading ? (
-                    <div style={{ padding: '3rem', color: '#9ca3af' }}>⏳ Loading analytics…</div>
-                ) : Object.keys(productCounts).length > 0 ? (
-                    <div className="chart-area">
-                        <div style={{ width: '100%', maxWidth: 520, height: 380 }}>
-                            <Pie data={data} options={options} />
-                        </div>
-                    </div>
-                ) : (
-                    <div style={{ padding: '2rem', color: '#9ca3af', fontStyle: 'italic' }}>
-                        No feedback data available yet.
-                    </div>
-                )}
-
-                <button
-                    className="btn-primary"
-                    onClick={() => window.history.back()}
-                    style={{ marginTop: '0.5rem' }}
-                >
-                    ← Go Back
-                </button>
+              </div>
             </div>
-        </div>
-    );
+            {feedbacks.length ? (
+              <>
+                <div className="chart-area">
+                  <Pie
+                    data={data}
+                    options={options}
+                    role="img"
+                    aria-label="Pie chart showing review counts by product; the values are listed in the table below."
+                  />
+                </div>
+                <div className="table-scroll">
+                  <table className="analytics-table">
+                    <caption className="visually-hidden">
+                      Review counts by product
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Product</th>
+                        <th scope="col">Reviews</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(counts).map(([product, count]) => (
+                        <tr key={product}>
+                          <td>{productLabel(product)}</td>
+                          <td>{count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                <h2>Insights start with a conversation.</h2>
+                <p>Charts will appear once customers have shared feedback.</p>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+    </div>
+  );
 }
-
-export default FeedbackAnalytics;

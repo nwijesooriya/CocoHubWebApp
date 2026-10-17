@@ -1,466 +1,492 @@
-// UserProfile.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import axios from "axios";
-import Swal from 'sweetalert2';
-import '../App.css';
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import {
-    FaEdit,
-    FaSave,
-    FaTimes,
-    FaUserCircle,
-    FaFacebookF,
-    FaTwitter,
-    FaInstagram,
-    FaUser,
-    FaLock,
-    FaHistory,
-    FaTrash,
-    FaSignOutAlt,
-    FaCog,
-    FaCalendarAlt,
-    FaEnvelope,
-    FaPhone,
-    FaUsers,
-    FaCamera
-  } from "react-icons/fa";
+  FaCamera,
+  FaUser,
+  FaLock,
+  FaUsers,
+  FaSignOutAlt,
+  FaPen,
+  FaArrowRight,
+  FaCalendarAlt,
+  FaHistory,
+  FaComments,
+} from "react-icons/fa";
+import api, { API_URL, apiError } from "../api";
+import { useAuth } from "./AuthContext";
+import {
+  PageHeader,
+  Notice,
+  Loading,
+  PasswordInput,
+  initials,
+  formatDate,
+} from "./UI";
 
-function UserProfile() {
-  const userId = localStorage.getItem("userId");
-  const userRole = localStorage.getItem("userRole");
-
-  const [userData, setUserData] = useState({
-    name: "",
-    email: "",
-    dob: "",
-    gender: "",
-    expectedRole: "",
-    profileImage: "",
-    mobile: "",
-    createdAt: "",
-    lastLogin: "",
-  });
-  
-  const [activeTab, setActiveTab] = useState("personal");
-  const [editField, setEditField] = useState("");
+export default function UserProfile() {
+  const { user, signOut, updateIdentity } = useAuth();
+  const userId = user?.userId;
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("personal");
+  const [edit, setEdit] = useState("");
+  const [draft, setDraft] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [showImageModal, setShowImageModal] = useState(false);
-  
-  const fileInputRef = useRef(null);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [image, setImage] = useState(null);
+  const [preview, setPreview] = useState("");
+  const [imageFailed, setImageFailed] = useState(false);
+  const fileRef = useRef(null);
+  const cancelRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const fullImage = (value) =>
+    !value ? "" : value.startsWith("http") ? value : `${API_URL}${value}`;
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const refreshed = await axios.get(`http://localhost:8000/user/get/${userId}`);
-        const updatedData = refreshed.data;
-        if (updatedData.profileImage && !updatedData.profileImage.startsWith('http')) {
-          updatedData.profileImage = `http://localhost:8000${updatedData.profileImage}`;
-        }
-        setUserData(updatedData);
-        setImagePreviewUrl(updatedData.profileImage);
-
-      } catch (error) {
-        setError(error.response?.data?.message || "Failed to fetch user data.");
-      }
-    };
-
-    if (userId) fetchUserData();
-    else setError("User ID not found. Please log in.");
-  }, [userId]);
-
-  const handleEdit = (field) => {
-    setEditField(field);
-    setError("");
-  };
-
-  const handleSave = async (field) => {
-    try {
-      const response = await axios.put(`http://localhost:8000/user/update/${userId}`, {
-        field,
-        value: userData[field],
-      });
-
-      if (response.status === 200) {
-        setEditField("");
-        setError("");
-        Swal.fire({
-          icon: 'success',
-          title: 'Updated!',
-          text: `${field.charAt(0).toUpperCase() + field.slice(1)} updated successfully.`,
-          timer: 1500,
-          showConfirmButton: false
-        });
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || "Update failed.");
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setEditField("");
-    setError("");
-  };
-
-  const handleImageChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setSelectedImage(file);
-      setImagePreviewUrl(URL.createObjectURL(file));
-      setShowImageModal(true);
-    }
-  };  
-
-  const handleSaveImage = async () => {
-    if (!selectedImage) return;
-
-    const formData = new FormData();
-    formData.append("profileImage", selectedImage);
-    formData.append("userId", userId);
-
-    try {
-      const response = await axios.post("http://localhost:8000/user/upload-image", formData);
-
-      if (response.data.imageUrl) {
-        const fullImageUrl = response.data.imageUrl.startsWith('http')
-          ? response.data.imageUrl
-          : `http://localhost:8000${response.data.imageUrl}`;
-        setUserData((prev) => ({ ...prev, profileImage: fullImageUrl }));
-        setImagePreviewUrl(fullImageUrl);
-        setSelectedImage(null);
-        setShowImageModal(false);
-        setError("");
-        Swal.fire({
-          icon: 'success',
-          title: 'Success!',
-          text: 'Profile image updated.',
-          timer: 1500,
-          showConfirmButton: false
-        });
-      }
-    } catch (error) {
-      setError(error.response?.data?.message || "Failed to upload image.");
-    }
-  };
-
-  const handleLogout = () => {
-    Swal.fire({
-      title: 'Logout?',
-      text: "Are you sure you want to sign out?",
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#059669',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Yes, Logout'
-    }).then((result) => {
-      if (result.isConfirmed) {
-        localStorage.clear();
-        navigate("/login");
-      }
-    });
-  };
-  
-  const handleDelete = async () => {
-    if (!currentPassword) {
-      setError("Password is required to delete account.");
+    if (!userId) {
+      setLoading(false);
       return;
     }
-
-    const result = await Swal.fire({
-      title: 'Are you absolutely sure?',
-      text: "This action is permanent and cannot be undone!",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#ef4444',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, delete my account'
-    });
-  
-    if (result.isConfirmed) {
-      try {
-        await axios.delete(`http://localhost:8000/user/delete/${userId}`, {
-          data: { currentPassword, requesterId: userId },
-        });
-  
-        Swal.fire({
-          icon: 'success',
-          title: 'Account Deleted',
-          text: 'We are sorry to see you go.',
-          timer: 2000,
-          showConfirmButton: false
-        });
-  
-        setTimeout(() => {
-          localStorage.clear();
-          window.location.href = "/login";
-        }, 2100);
-  
-      } catch (err) {
-        setError(err.response?.data?.message || "Account deletion failed.");
-      }
+    let active = true;
+    api
+      .get(`/user/get/${userId}`)
+      .then((res) => {
+        if (active) setData(res.data);
+      })
+      .catch((err) => {
+        if (active)
+          setError(
+            apiError(err, "We could not load your profile. Please try again."),
+          );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+  useEffect(() => {
+    if (!image) {
+      setPreview("");
+      return;
     }
-  };
-  
+    const url = URL.createObjectURL(image);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [image]);
+  useEffect(() => {
+    if (!image) return;
+    const previous = document.activeElement;
+    cancelRef.current?.focus();
+    const keydown = (e) => {
+      if (e.key === "Escape" && !busy) setImage(null);
+      if (e.key === "Tab") {
+        const buttons = Array.from(
+          document.querySelectorAll(".upload-modal button:not(:disabled)"),
+        );
+        const first = buttons[0],
+          last = buttons[buttons.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.removeEventListener("keydown", keydown);
+      previous?.focus();
+    };
+  }, [image, busy]);
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'long', day: 'numeric'
+  async function save(e) {
+    e.preventDefault();
+    setError("");
+    if (!draft.trim()) return setError("Please enter a value before saving.");
+    setBusy(true);
+    try {
+      await api.put(`/user/update/${userId}`, {
+        field: edit,
+        value: draft.trim(),
+      });
+      setData((previous) => ({ ...previous, [edit]: draft.trim() }));
+      updateIdentity(edit, draft.trim());
+      setEdit("");
+      setMessage("Your profile has been updated.");
+    } catch (err) {
+      setError(apiError(err, "Your changes could not be saved."));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function selectImage(e) {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 5 * 1024 * 1024)
+      return setError("Choose an image smaller than 5 MB.");
+    setError("");
+    setImage(file);
+  }
+  async function upload() {
+    setBusy(true);
+    setError("");
+    const form = new FormData();
+    form.append("profileImage", image);
+    form.append("userId", userId);
+    try {
+      const res = await api.post("/user/upload-image", form);
+      setData((previous) => ({ ...previous, profileImage: res.data.imageUrl }));
+      setImageFailed(false);
+      setImage(null);
+      setMessage("Your profile photo has been updated.");
+    } catch (err) {
+      setError(
+        apiError(err, "We could not upload your image. Please try again."),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  function logout() {
+    signOut();
+    navigate("/login", { replace: true });
+  }
+  async function deleteAccount(e) {
+    e.preventDefault();
+    setError("");
+    const result = await Swal.fire({
+      title: "Delete your account?",
+      text: "Your account will be permanently removed. This action cannot be undone.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Delete my account",
+      confirmButtonColor: "#ae3b32",
+      cancelButtonText: "Keep my account",
     });
-  };
+    if (!result.isConfirmed) return;
+    setBusy(true);
+    try {
+      await api.delete(`/user/delete/${userId}`, {
+        data: { currentPassword: password, requesterId: userId },
+      });
+      signOut();
+      navigate("/login", {
+        state: { message: "Your account has been deleted." },
+      });
+    } catch (err) {
+      setError(apiError(err, "Your account could not be deleted."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!userId)
+    return (
+      <div className="page-container page-space">
+        <div className="surface empty-state">
+          <FaUser />
+          <h1>A space of your own.</h1>
+          <p>Sign in to view your profile and manage your account.</p>
+          <Link className="btn btn-primary" to="/login">
+            Sign in <FaArrowRight />
+          </Link>
+        </div>
+      </div>
+    );
+  if (loading) return <Loading text="Loading your account…" />;
+  if (!data)
+    return (
+      <div className="page-container page-space">
+        <Notice>{error}</Notice>
+        <button
+          className="btn btn-secondary"
+          onClick={() => window.location.reload()}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  const fields = [
+    { key: "name", label: "Full name", type: "text" },
+    { key: "email", label: "Email address", type: "email" },
+    { key: "mobile", label: "Mobile number", type: "tel" },
+  ];
 
   return (
-    <div className="profile-container">
+    <div className="page-container page-space">
+      <PageHeader
+        eyebrow="Your CocoHub"
+        title={`Hello, ${data.name.split(" ")[0]}.`}
+        description="Your details, your connections, your corner of CocoHub."
+      />
+      <Notice type="success">{message || location.state?.message}</Notice>
+      {!image && <Notice>{error}</Notice>}
       <div className="profile-grid">
-        
-        {/* SIDEBAR */}
-        <aside className="profile-sidebar">
+        <aside className="surface profile-sidebar">
           <div className="profile-avatar-wrapper">
-            <img
-              src={imagePreviewUrl || "default-profile.png"}
-              alt="Profile"
-              className="profile-avatar-main"
-              onError={(e) => { e.target.src = "https://ui-avatars.com/api/?name=" + userData.name + "&background=059669&color=fff"; }}
-            />
-            <label htmlFor="avatar-upload" className="avatar-edit-badge">
-              <FaCamera />
-            </label>
-            <input 
-              type="file" 
-              id="avatar-upload" 
-              ref={fileInputRef} 
-              hidden 
-              accept="image/*" 
-              onChange={handleImageChange} 
-            />
-          </div>
-
-          <div className="profile-info-basic">
-            <h3>{userData.name || "User Name"}</h3>
-            <span className="role-badge">{userData.expectedRole || "Member"}</span>
-          </div>
-
-          <nav className="profile-nav">
-            <div 
-              className={`profile-nav-item ${activeTab === 'personal' ? 'active' : ''}`}
-              onClick={() => setActiveTab('personal')}
-            >
-              <FaUser /> Personal Info
-            </div>
-            <div 
-              className={`profile-nav-item ${activeTab === 'security' ? 'active' : ''}`}
-              onClick={() => setActiveTab('security')}
-            >
-              <FaLock /> Security
-            </div>
-            {(userRole === "Admin" || userRole === "Manager") && (
-              <div className="profile-nav-item" onClick={() => navigate("/manage-users")}>
-                <FaUsers /> Manage Users
-              </div>
+            {data.profileImage && !imageFailed ? (
+              <img
+                className="profile-avatar-main"
+                src={fullImage(data.profileImage)}
+                alt={`${data.name}'s profile`}
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <span className="profile-avatar-main avatar-initials">
+                {initials(data.name)}
+              </span>
             )}
-            
-            {/* Social Icons Integrated into Sidebar */}
-            <div className="sidebar-social-wrapper">
-              <p className="social-label">Connect with us</p>
-              <div className="social-icons-row">
-                <div className="social-dot facebook"><FaFacebookF /></div>
-                <div className="social-dot twitter"><FaTwitter /></div>
-                <div className="social-dot instagram"><FaInstagram /></div>
-              </div>
-            </div>
-          </nav>
-
-          <div className="profile-sidebar-footer">
-            <button className="btn-logout-alt" onClick={handleLogout}>
-              <FaSignOutAlt /> Sign Out
+            <button
+              className="avatar-edit-badge"
+              aria-label="Change profile photo"
+              onClick={() => fileRef.current?.click()}
+            >
+              <FaCamera />
             </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={selectImage}
+            />
           </div>
+          <h2>{data.name}</h2>
+          <span className="product-tag">
+            {data.expectedRole?.replace("_", " ")}
+          </span>
+          <nav className="profile-nav" aria-label="Account sections">
+            <button
+              className={tab === "personal" ? "active" : ""}
+              onClick={() => {
+                setTab("personal");
+                setError("");
+              }}
+            >
+              <FaUser /> Personal details
+            </button>
+            <button
+              className={tab === "security" ? "active" : ""}
+              onClick={() => {
+                setTab("security");
+                setError("");
+              }}
+            >
+              <FaLock /> Account security
+            </button>
+            {["Admin", "Manager"].includes(data.expectedRole) && (
+              <Link to="/manage-users">
+                <FaUsers /> Manage users
+              </Link>
+            )}
+            <Link to="/feedback">
+              <FaComments /> Customer feedback
+            </Link>
+          </nav>
+          <button className="btn btn-secondary btn-full" onClick={logout}>
+            <FaSignOutAlt /> Sign out
+          </button>
         </aside>
-
-        {/* MAIN CONTENT */}
-        <main className="profile-main-content">
-          
-          {/* Stats Summary Row */}
+        <div className="profile-main-content">
           <div className="stats-row">
-            <div className="stat-card stat-gradient-card">
-              <div className="stat-icon"><FaCalendarAlt /></div>
-              <div className="stat-info">
-                <span className="stat-label">Member Since</span>
-                <span className="stat-value">{new Date(userData.createdAt || Date.now()).getFullYear()}</span>
+            <div className="surface stat-card">
+              <FaCalendarAlt />
+              <div>
+                <span>Member since</span>
+                <strong>{formatDate(data.createdAt)}</strong>
               </div>
             </div>
-            <div className="stat-card stat-gradient-card">
-              <div className="stat-icon"><FaHistory /></div>
-              <div className="stat-info">
-                <span className="stat-label">Last Login</span>
-                <span className="stat-value">{userData.lastLogin ? new Date(userData.lastLogin).toLocaleDateString() : "Today"}</span>
-              </div>
-            </div>
-            <div className="stat-card stat-gradient-card">
-              <div className="stat-icon"><FaCog /></div>
-              <div className="stat-info">
-                <span className="stat-label">Status</span>
-                <span className="stat-value" style={{color: 'var(--primary)'}}>Active</span>
+            <div className="surface stat-card">
+              <FaHistory />
+              <div>
+                <span>Last signed in</span>
+                <strong>{formatDate(data.lastLogin)}</strong>
               </div>
             </div>
           </div>
-
-          {activeTab === 'personal' ? (
-            <div className="profile-section-card darker-section-card">
-              <div className="section-header">
-                <h2><FaUser /> Personal Information</h2>
-                <p style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>Manage your public profile and identity</p>
+          {tab === "personal" ? (
+            <section className="surface profile-section-card">
+              <div className="card-heading">
+                <div>
+                  <h2>Personal details</h2>
+                  <p>Keep your account information up to date.</p>
+                </div>
               </div>
-
-              {error && <div className="error">{error}</div>}
-
               <div className="info-grid">
-                {/* Full Name */}
-                <div className="info-item">
-                  <span className="label">Full Name</span>
-                  <div className="value-wrapper">
-                    {editField === "name" ? (
-                      <input
-                        value={userData.name}
-                        autoFocus
-                        onChange={(e) => setUserData({ ...userData, name: e.target.value })}
-                        onBlur={() => handleSave("name")}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSave("name")}
-                      />
+                {fields.map((field) => (
+                  <div className="info-item" key={field.key}>
+                    <span className="detail-label">{field.label}</span>
+                    {edit === field.key ? (
+                      <form onSubmit={save}>
+                        <label
+                          className="visually-hidden"
+                          htmlFor={`edit-${field.key}`}
+                        >
+                          {field.label}
+                        </label>
+                        <input
+                          className="form-control"
+                          id={`edit-${field.key}`}
+                          autoFocus
+                          type={field.type}
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          pattern={
+                            field.key === "mobile" ? "[0-9]{10}" : undefined
+                          }
+                          maxLength={field.key === "mobile" ? 10 : undefined}
+                          required
+                        />
+                        <div className="button-row">
+                          <button
+                            className="btn btn-primary btn-small"
+                            disabled={busy}
+                          >
+                            {busy ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-small"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => setEdit("")}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
                     ) : (
-                      <span className="value">{userData.name}</span>
+                      <div className="value-wrapper">
+                        <span>{data[field.key] || "Not provided"}</span>
+                        <button
+                          className="icon-button"
+                          aria-label={`Edit ${field.label.toLowerCase()}`}
+                          onClick={() => {
+                            setEdit(field.key);
+                            setDraft(data[field.key] || "");
+                            setError("");
+                          }}
+                        >
+                          <FaPen />
+                        </button>
+                      </div>
                     )}
-                    <button className="edit-action-btn" onClick={() => handleEdit("name")}>
-                      <FaEdit />
-                    </button>
                   </div>
-                </div>
-
-                {/* Email Address */}
+                ))}
                 <div className="info-item">
-                  <span className="label">Email Address</span>
-                  <div className="value-wrapper">
-                    {editField === "email" ? (
-                      <input
-                        type="email"
-                        value={userData.email}
-                        onChange={(e) => setUserData({ ...userData, email: e.target.value })}
-                        onBlur={() => handleSave("email")}
-                      />
-                    ) : (
-                      <span className="value">{userData.email}</span>
-                    )}
-                    <button className="edit-action-btn" onClick={() => handleEdit("email")}>
-                      <FaEdit />
-                    </button>
-                  </div>
+                  <span className="detail-label">Date of birth</span>
+                  <div className="value-wrapper">{formatDate(data.dob)}</div>
                 </div>
-
-                {/* Mobile Number */}
                 <div className="info-item">
-                  <span className="label">Phone Number</span>
-                  <div className="value-wrapper">
-                    {editField === "mobile" ? (
-                      <input
-                        value={userData.mobile}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0,10);
-                          setUserData({ ...userData, mobile: val });
-                        }}
-                        onBlur={() => handleSave("mobile")}
-                      />
-                    ) : (
-                      <span className="value">{userData.mobile || "Not Provided"}</span>
-                    )}
-                    <button className="edit-action-btn" onClick={() => handleEdit("mobile")}>
-                      <FaEdit />
-                    </button>
-                  </div>
+                  <span className="detail-label">Gender</span>
+                  <div className="value-wrapper">{data.gender}</div>
                 </div>
-
-                {/* Gender */}
                 <div className="info-item">
-                  <span className="label">Gender</span>
+                  <span className="detail-label">Account role</span>
                   <div className="value-wrapper">
-                    <span className="value">{userData.gender || "-"}</span>
-                    <FaCog style={{color: '#cbd5e1'}} />
-                  </div>
-                </div>
-
-                {/* Date of Birth */}
-                <div className="info-item">
-                  <span className="label">Birthday</span>
-                  <div className="value-wrapper">
-                    <span className="value">{formatDate(userData.dob)}</span>
-                    <FaCalendarAlt style={{color: '#cbd5e1'}} />
-                  </div>
-                </div>
-
-                {/* Role */}
-                <div className="info-item">
-                  <span className="label">Current Role</span>
-                  <div className="value-wrapper">
-                    <span className="value" style={{textTransform: 'capitalize'}}>{userData.expectedRole?.replace('_', ' ')}</span>
-                    <FaUsers style={{color: '#cbd5e1'}} />
+                    {data.expectedRole?.replace("_", " ")}
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
           ) : (
-            <div className="profile-section-card danger-zone darker-section-card">
-              <div className="section-header">
-                <h2><FaLock /> Account Security</h2>
-              </div>
-              
-              <div className="danger-card-content">
-                <div className="danger-icon-box"><FaTrash /></div>
-                <div className="danger-text-box">
-                  <h4>Delete Your Account</h4>
-                  <p>Once you delete your account, there is no going back. All your data will be permanently removed from our servers. Please be certain.</p>
-                  
-                  <div className="delete-account-form">
-                    <input 
-                      type="password" 
-                      placeholder="Confirm your password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                    />
-                    <button className="delete-button" onClick={handleDelete} style={{padding: '0 20px', height: '45px'}}>
-                      Delete Account
-                    </button>
-                  </div>
-                  {error && <p className="error" style={{textAlign: 'left', marginTop: '10px'}}>{error}</p>}
+            <section className="surface profile-section-card">
+              <div className="card-heading">
+                <div>
+                  <h2>Account security</h2>
+                  <p>Manage your password and account.</p>
                 </div>
               </div>
-            </div>
+              <div className="security-password">
+                <div>
+                  <h3>Change your password</h3>
+                  <p>Choose a new password for your next sign in.</p>
+                </div>
+                <Link
+                  to="/forgot-password"
+                  className="btn btn-secondary btn-small"
+                >
+                  Reset password
+                </Link>
+              </div>
+              <div className="danger-panel account-danger">
+                <h3>Delete account</h3>
+                <p>
+                  This permanently removes your CocoHub account. Enter your
+                  current password, then confirm your decision.
+                </p>
+                <form onSubmit={deleteAccount}>
+                  <PasswordInput
+                    id="delete-password"
+                    label="Current password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button className="btn btn-danger" disabled={busy}>
+                    {busy ? "Deleting…" : "Delete my account"}
+                  </button>
+                </form>
+              </div>
+            </section>
           )}
-        </main>
-      </div>
-
-      {/* Image Upload Modal Overlay */}
-      {showImageModal && (
-        <div className="upload-overlay">
-          <div className="upload-modal">
-            <h3 style={{marginBottom: '1rem'}}>Update Profile Photo</h3>
-            <div className="upload-preview-circle">
-              <img src={imagePreviewUrl} alt="Preview" />
+          <div className="profile-feedback-cta">
+            <span className="round-icon">
+              <FaComments />
+            </span>
+            <div>
+              <h3>Have something to share?</h3>
+              <p>Your experience helps our community grow.</p>
             </div>
-            <div style={{display: 'flex', gap: '10px', justifyContent: 'center'}}>
-              <button className="save-changes-button" onClick={handleSaveImage}>
-                <FaSave /> Confirm Upload
-              </button>
-              <button className="cancel-changes-button" onClick={() => { setShowImageModal(false); setImagePreviewUrl(userData.profileImage); }} style={{color: 'var(--text-secondary)'}}>
-                <FaTimes /> Cancel
-              </button>
-            </div>
+            <Link to="/add" className="text-link">
+              Write a review <FaArrowRight />
+            </Link>
           </div>
+        </div>
+      </div>
+      {image && (
+        <div className="upload-overlay">
+          <section
+            className="upload-modal surface"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upload-title"
+          >
+            <h2 id="upload-title">A fresh profile photo.</h2>
+            <p>Preview your image before uploading.</p>
+            <Notice>{error}</Notice>
+            <img
+              className="upload-preview-circle"
+              src={preview}
+              alt="New profile preview"
+            />
+            <div className="button-row">
+              <button
+                className="btn btn-primary"
+                disabled={busy}
+                onClick={upload}
+              >
+                {busy ? "Uploading…" : "Upload photo"}
+              </button>
+              <button
+                ref={cancelRef}
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={() => setImage(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
         </div>
       )}
     </div>
   );
 }
-
-export default UserProfile;

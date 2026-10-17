@@ -1,96 +1,78 @@
 import React, { useState } from "react";
-import axios from "axios";
-import Swal from "sweetalert2";
-import { useNavigate } from "react-router-dom";
-import { FaEye, FaEyeSlash, FaLock } from "react-icons/fa";
-import '../App.css';
+import { Link, useNavigate } from "react-router-dom";
+import api, { apiError } from "../api";
+import { AuthLayout, Notice, PasswordInput } from "./UI";
 
-function ForgotPassword() {
-    const [email, setEmail]               = useState("");
-    const [newPassword, setNewPassword]   = useState("");
-    const [showNewPassword, setShowNewPassword] = useState(false);
-    const navigate = useNavigate();
-
-    const handleResetPassword = (e) => {
-        e.preventDefault();
-
-        axios.put("http://localhost:8000/user/forgot-password", { email, newPassword })
-            .then(() => {
-                Swal.fire({
-                    icon: "success",
-                    title: "Password Reset! 🔒",
-                    text: "You can now login with your new password.",
-                    timer: 2000,
-                    showConfirmButton: false,
-                });
-                setTimeout(() => navigate("/login"), 2200);
-            })
-            .catch((err) => {
-                Swal.fire({
-                    icon: "error",
-                    title: "Reset Failed",
-                    text: err.response?.data?.message || "Something went wrong. Please try again.",
-                });
-            });
-    };
-
-    return (
-        <div className="form-container">
-            <div className="auth-card">
-                {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: '1.8rem' }}>
-                    <div style={{
-                        width: 60, height: 60, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #047857, #10b981)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 1rem', boxShadow: '0 8px 20px rgba(5,150,105,0.3)',
-                        fontSize: '1.5rem', color: '#fff'
-                    }}>
-                        <FaLock />
-                    </div>
-                    <h1 className="auth-title">Reset Password</h1>
-                    <p className="auth-subtitle">Enter your email and choose a new password</p>
-                </div>
-
-                <form onSubmit={handleResetPassword}>
-                    <div className="form-group">
-                        <label htmlFor="Email" className="form-label">Registered Email Address</label>
-                        <input
-                            type="email" className="form-control" id="Email"
-                            placeholder="you@example.com"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="NewPassword" className="form-label">New Password</label>
-                        <div className="password-wrapper">
-                            <input
-                                type={showNewPassword ? "text" : "password"}
-                                className="form-control" id="NewPassword"
-                                placeholder="Min. 8 characters"
-                                value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                                required
-                                style={{ paddingRight: '2.5rem' }}
-                            />
-                            <span className="eye-icon2" onClick={() => setShowNewPassword(!showNewPassword)}>
-                                {showNewPassword ? <FaEyeSlash /> : <FaEye />}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="signup-button-container" style={{ marginTop: '1.5rem' }}>
-                        <button type="submit" className="signup-button" style={{ width: '100%', maxWidth: '100%' }}>
-                            🔒 Reset Password
-                        </button>
-                    </div>
-                </form>
-            </div>
+export default function ForgotPassword() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const navigate = useNavigate();
+  async function submit(e) {
+    e.preventDefault();
+    setError("");
+    if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password))
+      return setError(
+        "Use at least 8 characters, including letters and numbers.",
+      );
+    setBusy(true);
+    try {
+      await api.put("/user/forgot-password", {
+        email: email.trim(),
+        newPassword: password,
+      });
+      navigate("/login", {
+        state: {
+          message: "Your password was updated. Sign in with your new password.",
+        },
+      });
+    } catch (err) {
+      setError(
+        apiError(err, "We could not reset your password. Please try again."),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <AuthLayout
+      eyebrow="Account support"
+      title="A fresh start."
+      description="Enter your registered email and choose a new password."
+    >
+      <Notice>{error}</Notice>
+      <form onSubmit={submit} aria-busy={busy}>
+        <div className="form-group">
+          <label className="form-label" htmlFor="reset-email">
+            Registered email address
+          </label>
+          <input
+            className="form-control"
+            id="reset-email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </div>
-    );
+        <PasswordInput
+          id="reset-password"
+          label="New password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+          minLength={8}
+          guidance="At least 8 characters, including letters and numbers."
+        />
+        <button className="btn btn-primary btn-full" disabled={busy}>
+          {busy ? "Updating password…" : "Reset password"}
+        </button>
+      </form>
+      <p className="auth-switch">
+        <Link to="/login">Back to sign in</Link>
+      </p>
+    </AuthLayout>
+  );
 }
-
-export default ForgotPassword;

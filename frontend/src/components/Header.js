@@ -1,61 +1,91 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import '../App.css'; 
-import logo from '../../src/images/logo.png'
-import { FaSun, FaMoon } from 'react-icons/fa';
+import React, { useState, useEffect } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import {
+  FaLeaf,
+  FaMoon,
+  FaSun,
+  FaBars,
+  FaTimes,
+  FaArrowRight,
+  FaUser,
+} from "react-icons/fa";
+import { useAuth } from "./AuthContext";
 
-function Header({ theme, toggleTheme }) {
+export function Brand() {
   return (
-    <nav className="navbar navbar-expand-lg">
-      <div className="container-fluid">
-        <Link to="/" className="navbar-brand">
-          <img src={logo} alt="Coco Hub Logo" className="logo" />
-          <span className="logo-text">Coco Hub</span>
-        </Link>
-
-        <div className="d-flex align-items-center order-lg-last">
-          {/* Theme Toggle Button */}
-          <button className="theme-toggle-btn me-3" onClick={toggleTheme} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
-            {theme === 'light' ? <FaMoon /> : <FaSun />}
-          </button>
-        </div>
-
-        <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
-          <span className="navbar-toggler-icon"></span>
-        </button>
-
-        <div className="collapse navbar-collapse" id="navbarSupportedContent">
-          <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-          <li className="nav-item">
-              <Link to="/" className="nav-link">
-                <b>About Us</b>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link to="/feedback" className="nav-link">
-                <b>View Feedback</b>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link to="/add" className="nav-link">
-                <b>Add Feedback</b>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link to="/profile" className="nav-link">
-                <b>User Profile</b>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link to="/signup" className="nav-link">
-                <b>Registration</b>
-              </Link>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </nav>
+    <Link to="/" className="brand" aria-label="CocoHub home">
+      <span className="brand-mark">
+        <FaLeaf />
+      </span>
+      <span>
+        Coco<span className="brand-accent">Hub</span>
+        <small>ROOTED IN POSSIBILITY</small>
+      </span>
+    </Link>
   );
 }
 
-export default Header;
+export default function Header({ theme, toggleTheme }) {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  const { user } = useAuth();
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+  return (
+    <header className="site-header">
+      <div className="nav-container">
+        <Brand />
+        <button
+          type="button"
+          className="icon-button menu-toggle"
+          aria-label={open ? "Close navigation" : "Open navigation"}
+          aria-expanded={open}
+          aria-controls="main-navigation"
+          onClick={() => setOpen(!open)}
+        >
+          {open ? <FaTimes /> : <FaBars />}
+        </button>
+        <nav
+          id="main-navigation"
+          className={`main-navigation ${open ? "is-open" : ""}`}
+          aria-label="Main navigation"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setOpen(false);
+          }}
+        >
+          <div className="nav-links">
+            <NavLink to="/" end>
+              Home & about
+            </NavLink>
+            <NavLink to="/feedback">Customer feedback</NavLink>
+            <NavLink to="/add">Write a review</NavLink>
+          </div>
+          <div className="nav-actions">
+            <button
+              className="icon-button"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+            >
+              {theme === "light" ? <FaMoon /> : <FaSun />}
+            </button>
+            {user ? (
+              <NavLink className="btn btn-primary btn-small" to="/profile">
+                <FaUser /> My account
+              </NavLink>
+            ) : (
+              <>
+                <NavLink to="/login" className="nav-signin">
+                  Sign in
+                </NavLink>
+                <Link to="/signup" className="btn btn-primary btn-small">
+                  Get started <FaArrowRight />
+                </Link>
+              </>
+            )}
+          </div>
+        </nav>
+      </div>
+    </header>
+  );
+}

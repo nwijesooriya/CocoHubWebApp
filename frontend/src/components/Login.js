@@ -1,122 +1,90 @@
 import React, { useState } from "react";
-import axios from "axios";
-import { useNavigate, Link } from 'react-router-dom';
-import '../App.css';
-import { FaEye, FaEyeSlash, FaSignInAlt } from "react-icons/fa";
-import Swal from 'sweetalert2';
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { FaArrowRight } from "react-icons/fa";
+import api, { apiError } from "../api";
+import { useAuth } from "./AuthContext";
+import { AuthLayout, Notice, PasswordInput } from "./UI";
 
-function Login() {
-    const [email, setEmail]             = useState("");
-    const [password, setPassword]       = useState("");
-    const [showPassword, setShowPassword] = useState(false);
-    const navigate = useNavigate();
+export default function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const { signIn } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-    function sendData(e) {
-        e.preventDefault();
-
-        const userData = { email, password };
-
-        axios.post("http://localhost:8000/api/auth", userData)
-            .then((response) => {
-                const { token, userId, name, email: userEmail, expectedRole } = response.data.data;
-
-                localStorage.setItem("token", token);
-                localStorage.setItem("userId", userId);
-                localStorage.setItem("userName", name);
-                localStorage.setItem("userEmail", userEmail);
-                localStorage.setItem("userRole", expectedRole);
-
-                Swal.fire({
-                    icon: 'success',
-                    title: `Welcome back, ${name}! 🎉`,
-                    text: 'You have logged in successfully.',
-                    showConfirmButton: false,
-                    timer: 2000,
-                    timerProgressBar: true,
-                });
-
-                setTimeout(() => navigate("/profile"), 1600);
-            })
-            .catch((err) => {
-                Swal.fire({
-                    icon: 'error',
-                    title: err.response?.status === 401 ? 'Invalid Credentials' : 'Login Failed',
-                    text: err.response?.data?.message || 'Invalid email or password. Please try again.',
-                });
-            });
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const response = await api.post("/api/auth", {
+        email: email.trim(),
+        password,
+      });
+      signIn(response.data.data);
+      navigate("/profile", {
+        replace: true,
+        state: { message: "Welcome back. You are signed in." },
+      });
+    } catch (err) {
+      setError(
+        apiError(
+          err,
+          "We could not sign you in. Check your email and password, then try again.",
+        ),
+      );
+    } finally {
+      setBusy(false);
     }
+  }
 
-    return (
-        <div className="form-container">
-            <div className="auth-card">
-                {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: '1.8rem' }}>
-                    <div style={{
-                        width: 60, height: 60, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #047857, #10b981)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 1rem', boxShadow: '0 8px 20px rgba(5,150,105,0.3)',
-                        fontSize: '1.6rem', color: '#fff'
-                    }}>🔑</div>
-                    <h1 className="auth-title">Welcome Back</h1>
-                    <p className="auth-subtitle">Sign in to your CocoHub account</p>
-                </div>
-
-                <form onSubmit={sendData}>
-                    {/* Email */}
-                    <div className="form-group">
-                        <label htmlFor="UserEmail" className="form-label">Email Address</label>
-                        <input
-                            type="email"
-                            className="form-control"
-                            id="UserEmail"
-                            placeholder="you@example.com"
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                        />
-                    </div>
-
-                    {/* Password */}
-                    <div className="form-group">
-                        <label htmlFor="Password" className="form-label">Password</label>
-                        <div className="password-wrapper">
-                            <input
-                                type={showPassword ? "text" : "password"}
-                                className="form-control"
-                                id="Password"
-                                placeholder="Enter your password"
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                style={{ paddingRight: '2.5rem' }}
-                            />
-                            <span className="eye-icon" onClick={() => setShowPassword(!showPassword)}>
-                                {showPassword ? <FaEyeSlash /> : <FaEye />}
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Forgot */}
-                    <div style={{ textAlign: 'right', marginBottom: '1rem' }}>
-                        <Link to="/forgot-password" style={{ fontSize: '0.82rem' }}>
-                            Forgot Password?
-                        </Link>
-                    </div>
-
-                    {/* Submit */}
-                    <div className="signup-button-container" style={{ marginTop: '0.5rem' }}>
-                        <button type="submit" className="signup-button" style={{ width: '100%', maxWidth: '100%' }}>
-                            <FaSignInAlt /> Sign In
-                        </button>
-                    </div>
-                </form>
-
-                <p style={{ textAlign: 'center', marginTop: '1.4rem', fontSize: '0.875rem', color: '#6b7280' }}>
-                    Don't have an account?{' '}
-                    <Link to="/signup">Create one here</Link>
-                </p>
-            </div>
+  return (
+    <AuthLayout
+      eyebrow="Your CocoHub account"
+      title="Welcome back."
+      description="A familiar place for fresh possibilities. Sign in to continue."
+    >
+      <Notice type="success">{location.state?.message}</Notice>
+      <Notice>{error}</Notice>
+      <form onSubmit={submit} aria-busy={busy}>
+        <div className="form-group">
+          <label htmlFor="login-email" className="form-label">
+            Email address
+          </label>
+          <input
+            type="email"
+            id="login-email"
+            autoComplete="email"
+            className="form-control"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            required
+          />
         </div>
-    );
+        <PasswordInput
+          id="login-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <div className="form-link">
+          <Link to="/forgot-password">Forgot your password?</Link>
+        </div>
+        <button className="btn btn-primary btn-full" disabled={busy}>
+          {busy ? (
+            "Signing in…"
+          ) : (
+            <>
+              Sign in <FaArrowRight />
+            </>
+          )}
+        </button>
+      </form>
+      <p className="auth-switch">
+        New to CocoHub? <Link to="/signup">Create an account</Link>
+      </p>
+    </AuthLayout>
+  );
 }
-
-export default Login;

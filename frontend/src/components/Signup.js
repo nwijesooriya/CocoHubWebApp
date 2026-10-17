@@ -1,179 +1,224 @@
 import React, { useState } from "react";
-import axios from "axios";
-import { Link } from 'react-router-dom';
-import '../App.css';
-import { FaEye, FaEyeSlash, FaUserPlus } from "react-icons/fa";
-import Swal from 'sweetalert2';
+import { Link, useNavigate } from "react-router-dom";
+import { FaArrowRight, FaCheck } from "react-icons/fa";
+import api, { apiError } from "../api";
+import { AuthLayout, Notice, PasswordInput } from "./UI";
 
-function Signup() {
-    const [name, setName]               = useState("");
-    const [email, setEmail]             = useState("");
-    const [password, setPassword]       = useState("");
-    const [dob, setDob]                 = useState("");
-    const [gender, setGender]           = useState("");
-    const [expectedRole, setExpectedRole] = useState("");
-    const [mobile, setMobile]           = useState("");
-    const [isChecked, setIsChecked]     = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
+export default function Signup() {
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    dob: "",
+    gender: "",
+    expectedRole: "",
+    mobile: "",
+  });
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+  const change = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const strong = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(form.password);
+  const today = new Date();
+  const maxDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
-    function sendData(e) {
-        e.preventDefault();
-
-        if (!isChecked) {
-            Swal.fire({ icon: 'warning', title: 'Terms Required', text: 'You must agree to the Terms & Conditions.' });
-            return;
-        }
-
-        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
-        if (!passwordRegex.test(password)) {
-            Swal.fire({ icon: 'warning', title: 'Weak Password', text: 'Password must be at least 8 characters long and include both letters and numbers.' });
-            return;
-        }
-
-        const newUser = { name, email, password, dob, gender, expectedRole, mobile };
-
-        axios.post("http://localhost:8000/user/add", newUser)
-            .then((response) => {
-                localStorage.setItem("userId", response.data.data);
-                Swal.fire({
-                    icon: 'success',
-                    title: '🎉 Registration Successful!',
-                    text: 'Welcome to CocoHub! You can now login.',
-                    showConfirmButton: false,
-                    timer: 2000,
-                    timerProgressBar: true,
-                });
-                setTimeout(() => { window.location.href = "/login"; }, 2100);
-            })
-            .catch((err) => {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Registration Failed',
-                    text: err.response?.data?.message || err.message,
-                    confirmButtonColor: '#d33',
-                });
-            });
+  async function submit(e) {
+    e.preventDefault();
+    setError("");
+    if (!form.name.trim()) return setError("Please enter your full name.");
+    if (!strong)
+      return setError(
+        "Use at least 8 characters, including letters and numbers.",
+      );
+    if (!consent)
+      return setError("Please confirm your account details before continuing.");
+    setBusy(true);
+    try {
+      await api.post("/user/add", {
+        ...form,
+        name: form.name.trim(),
+        email: form.email.trim(),
+      });
+      navigate("/login", {
+        state: { message: "Your account is ready. Sign in to get started." },
+      });
+    } catch (err) {
+      setError(
+        apiError(err, "We could not create your account. Please try again."),
+      );
+    } finally {
+      setBusy(false);
     }
+  }
 
-    return (
-        <div className="form-container" style={{ paddingTop: '1.5rem', paddingBottom: '2rem' }}>
-            <div className="auth-card" style={{ maxWidth: 540 }}>
-                {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: '1.6rem' }}>
-                    <div style={{
-                        width: 60, height: 60, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #047857, #10b981)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 1rem', boxShadow: '0 8px 20px rgba(5,150,105,0.3)',
-                        fontSize: '1.5rem', color: '#fff'
-                    }}>🤵</div>
-                    <h1 className="auth-title">Create Account</h1>
-                    <p className="auth-subtitle">Join CocoHub — your coconut marketplace</p>
-                </div>
-
-                <form onSubmit={sendData}>
-                    {/* Name */}
-                    <div className="form-group">
-                        <label htmlFor="UserName" className="form-label">Full Name</label>
-                        <input type="text" className="form-control" id="UserName"
-                            placeholder="Enter your full name"
-                            onChange={(e) => setName(e.target.value)} required />
-                    </div>
-
-                    {/* Email */}
-                    <div className="form-group">
-                        <label htmlFor="UserEmail" className="form-label">Email Address</label>
-                        <input type="email" className="form-control" id="UserEmail"
-                            placeholder="you@example.com"
-                            onChange={(e) => setEmail(e.target.value)} required />
-                        <p className="form-text">We'll never share your email with anyone.</p>
-                    </div>
-
-                    {/* Password */}
-                    <div className="form-group">
-                        <label htmlFor="Password" className="form-label">Password</label>
-                        <div className="password-input-container">
-                            <input
-                                type={showPassword ? "text" : "password"}
-                                className="form-control" id="Password"
-                                placeholder="Min. 8 chars with letters & numbers"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                style={{ paddingRight: '2.5rem' }}
-                            />
-                            <span className="toggle-password" onClick={() => setShowPassword(!showPassword)}>
-                                {showPassword ? <FaEyeSlash /> : <FaEye />}
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Mobile */}
-                    <div className="form-group">
-                        <label htmlFor="UserMobile" className="form-label">Mobile Number</label>
-                        <input type="text" className="form-control" id="UserMobile"
-                            placeholder="07XXXXXXXX" value={mobile}
-                            onChange={(e) => {
-                                const input = e.target.value;
-                                if (/^\d{0,10}$/.test(input)) setMobile(input);
-                            }} required />
-                    </div>
-
-                    {/* DOB + Gender side by side */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                        <div className="form-group">
-                            <label htmlFor="dob" className="form-label">Date of Birth</label>
-                            <input type="date" className="form-control" id="dob"
-                                onChange={(e) => setDob(e.target.value)} required />
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="gender" className="form-label">Gender</label>
-                            <select className="form-select" id="gender"
-                                onChange={(e) => setGender(e.target.value)} required>
-                                <option value="">Select</option>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Role */}
-                    <div className="form-group">
-                        <label htmlFor="expectedRole" className="form-label">Expected Role</label>
-                        <select className="form-select" id="expectedRole"
-                            onChange={(e) => setExpectedRole(e.target.value)} required>
-                            <option value="">Select a role</option>
-                            <option value="Admin">Admin</option>
-                            <option value="Manager">Manager</option>
-                            <option value="Supplier">Supplier</option>
-                            <option value="Delivery_person">Delivery Person</option>
-                            <option value="Customer">Customer</option>
-                        </select>
-                    </div>
-
-                    {/* Terms */}
-                    <div className="form-check" style={{ marginBottom: '1.2rem' }}>
-                        <input type="checkbox" className="form-check-input" id="TermsCheck"
-                            onChange={(e) => setIsChecked(e.target.checked)} />
-                        <label className="form-check-label" htmlFor="TermsCheck">
-                            I agree to the <a href="/">Terms &amp; Conditions</a>
-                        </label>
-                    </div>
-
-                    <div className="signup-button-container" style={{ marginTop: '0' }}>
-                        <button type="submit" className="signup-button" style={{ width: '100%', maxWidth: '100%' }}>
-                            <FaUserPlus /> Create Account
-                        </button>
-                    </div>
-                </form>
-
-                <p style={{ textAlign: 'center', marginTop: '1.4rem', fontSize: '0.875rem', color: '#6b7280' }}>
-                    Already have an account? <Link to="/login">Sign in here</Link>
-                </p>
-            </div>
+  return (
+    <AuthLayout
+      eyebrow="Join the CocoHub community"
+      title="Let's grow together."
+      description="Create your account. A world of coconut possibilities awaits."
+    >
+      <Notice>{error}</Notice>
+      <form onSubmit={submit} aria-busy={busy}>
+        <div className="form-group">
+          <label htmlFor="signup-name" className="form-label">
+            Full name
+          </label>
+          <input
+            id="signup-name"
+            name="name"
+            autoComplete="name"
+            className="form-control"
+            value={form.name}
+            onChange={change}
+            placeholder="Your full name"
+            required
+          />
         </div>
-    );
+        <div className="form-group">
+          <label htmlFor="signup-email" className="form-label">
+            Email address
+          </label>
+          <input
+            type="email"
+            id="signup-email"
+            name="email"
+            autoComplete="email"
+            className="form-control"
+            value={form.email}
+            onChange={change}
+            placeholder="you@example.com"
+            required
+          />
+        </div>
+        <PasswordInput
+          id="signup-password"
+          value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+          autoComplete="new-password"
+          minLength={8}
+          guidance="At least 8 characters, including letters and numbers."
+        />
+        {form.password && (
+          <p
+            className={`password-guidance ${strong ? "is-valid" : ""}`}
+            aria-live="polite"
+          >
+            {strong ? (
+              <>
+                <FaCheck /> Password meets the requirements
+              </>
+            ) : (
+              "Add letters and numbers to make your password stronger."
+            )}
+          </p>
+        )}
+        <div className="form-grid">
+          <div className="form-group">
+            <label htmlFor="signup-mobile" className="form-label">
+              Mobile number
+            </label>
+            <input
+              type="tel"
+              id="signup-mobile"
+              name="mobile"
+              autoComplete="tel"
+              inputMode="numeric"
+              pattern="[0-9]{10}"
+              maxLength={10}
+              className="form-control"
+              value={form.mobile}
+              onChange={change}
+              placeholder="07XXXXXXXX"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="signup-dob" className="form-label">
+              Date of birth
+            </label>
+            <input
+              type="date"
+              id="signup-dob"
+              name="dob"
+              autoComplete="bday"
+              max={maxDate}
+              className="form-control"
+              value={form.dob}
+              onChange={change}
+              required
+            />
+          </div>
+        </div>
+        <div className="form-grid">
+          <div className="form-group">
+            <label htmlFor="signup-gender" className="form-label">
+              Gender
+            </label>
+            <select
+              id="signup-gender"
+              name="gender"
+              className="form-select"
+              value={form.gender}
+              onChange={change}
+              required
+            >
+              <option value="">Select gender</option>
+              {["Male", "Female", "Other"].map((x) => (
+                <option key={x}>{x}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label htmlFor="signup-role" className="form-label">
+              Account role
+            </label>
+            <select
+              id="signup-role"
+              name="expectedRole"
+              className="form-select"
+              value={form.expectedRole}
+              onChange={change}
+              required
+            >
+              <option value="">Select your role</option>
+              {[
+                "Admin",
+                "Manager",
+                "Supplier",
+                "Delivery_person",
+                "Customer",
+              ].map((x) => (
+                <option key={x} value={x}>
+                  {x.replace("_", " ")}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            required
+          />
+          I confirm these details are correct and want to create a CocoHub
+          account.
+        </label>
+        <button className="btn btn-primary btn-full" disabled={busy}>
+          {busy ? (
+            "Creating your account…"
+          ) : (
+            <>
+              Create account <FaArrowRight />
+            </>
+          )}
+        </button>
+      </form>
+      <p className="auth-switch">
+        Already have an account? <Link to="/login">Sign in</Link>
+      </p>
+    </AuthLayout>
+  );
 }
-
-export default Signup;

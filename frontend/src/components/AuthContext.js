@@ -1,30 +1,41 @@
-import { createContext, useContext, useState, useEffect } from "react";
-import axios from "axios";
+import { createContext, useContext, useState } from "react";
 
 const AuthContext = createContext();
+const SESSION_KEYS = ["token", "userId", "userName", "userEmail", "userRole"];
 
-export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-
-    useEffect(() => {
-        const fetchUser = async () => {
-            try {
-                const response = await axios.get("http://localhost:8000/user/", { withCredentials: true });
-                setUser(response.data);
-            } catch (err) {
-                setUser(null);
-            }
-        };
-
-        fetchUser();
-    }, []);
-
-    return (
-        <AuthContext.Provider value={{ user, setUser }}>
-            {children}
-        </AuthContext.Provider>
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(() =>
+    localStorage.getItem("token") && localStorage.getItem("userId")
+      ? {
+          userId: localStorage.getItem("userId"),
+          name: localStorage.getItem("userName"),
+          email: localStorage.getItem("userEmail"),
+          expectedRole: localStorage.getItem("userRole"),
+        }
+      : null,
+  );
+  const signIn = (data) => {
+    [data.token, data.userId, data.name, data.email, data.expectedRole].forEach(
+      (value, i) => localStorage.setItem(SESSION_KEYS[i], value || ""),
     );
-};
+    setUser(data);
+  };
+  const signOut = () => {
+    SESSION_KEYS.forEach((key) => localStorage.removeItem(key));
+    setUser(null);
+  };
+  const updateIdentity = (field, value) => {
+    if (field === "name") localStorage.setItem("userName", value);
+    if (field === "email") localStorage.setItem("userEmail", value);
+    setUser((previous) => ({ ...previous, [field]: value }));
+  };
+  return (
+    <AuthContext.Provider
+      value={{ user, setUser, signIn, signOut, updateIdentity }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
 
-// ✅ Correctly exporting useAuth
 export const useAuth = () => useContext(AuthContext);

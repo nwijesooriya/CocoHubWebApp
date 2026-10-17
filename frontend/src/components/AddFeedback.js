@@ -1,166 +1,218 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
-import Swal from 'sweetalert2';
-import '../App.css';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  FaArrowRight,
+  FaRegCommentDots,
+  FaShieldAlt,
+  FaRegClock,
+} from "react-icons/fa";
+import api, { apiError } from "../api";
+import { PageHeader, Notice, Stars } from "./UI";
 
-const PRODUCTS = [
-    'Coconut Milk Powder', 'Coconut Shell', 'Coconut Shell Charcol',
-    'Fiber rope', 'Coconut Oil', 'Husk',
-    'Coconut Shell Cups', 'Coconut Shell Spoons', 'Other Products'
+// These values match the existing Feedback schema, including its original spelling.
+export const PRODUCTS = [
+  "Coconut Milk Powder",
+  "Coconut Shell",
+  "Coconut Shell Charcol",
+  "Fiber rope",
+  "Coconut Oil",
+  "Husk",
+  "Coconut Shell Cups",
+  "Coconut Shell Spoons",
+  "Other Products",
 ];
+export const productLabel = (value) =>
+  value === "Coconut Shell Charcol" ? "Coconut Shell Charcoal" : value;
 
-function AddFeedback() {
-    const [customerName, setName]       = useState(localStorage.getItem("userName") || "");
-    const [email, setEmail]             = useState(localStorage.getItem("userEmail") || "");
-    const [comment, setComment]         = useState("");
-    const [isChecked, setIsChecked]     = useState(false);
-    const [productItem, setProductItem] = useState('');
-    const [rating, setRating]           = useState(0);
-    const [hoverRating, setHoverRating] = useState(0);
-
-    useEffect(() => {
-        const storedName  = localStorage.getItem("userName");
-        const storedEmail = localStorage.getItem("userEmail");
-        if (storedName)  setName(storedName);
-        if (storedEmail) setEmail(storedEmail);
-    }, []);
-
-    function sendData(e) {
-        e.preventDefault();
-
-        if (!isChecked) {
-            Swal.fire({ icon: 'warning', title: 'Consent Required', text: 'Please agree to publish your review before submitting.' });
-            return;
-        }
-
-        if (rating === 0) {
-            Swal.fire({ icon: 'warning', title: 'Rating Required', text: 'Please select a star rating before submitting.' });
-            return;
-        }
-
-        axios.post("http://localhost:8000/feedback/add", { customerName, email, comment, productItem, rating })
-            .then(() => {
-                Swal.fire({
-                    icon: 'success',
-                    title: '✅ Feedback Submitted!',
-                    text: 'Thank you for your valuable feedback.',
-                    showConfirmButton: false,
-                    timer: 2000,
-                    timerProgressBar: true,
-                });
-                setTimeout(() => { window.location.href = "/feedback"; }, 2100);
-            })
-            .catch((err) => {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Submission Failed',
-                    text: err.response?.data?.error || err.message,
-                    confirmButtonColor: '#d33',
-                });
-            });
+export default function AddFeedback() {
+  const [form, setForm] = useState({
+    customerName: localStorage.getItem("userName") || "",
+    email: localStorage.getItem("userEmail") || "",
+    comment: "",
+    productItem: "",
+    rating: 0,
+  });
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+  const change = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  async function submit(e) {
+    e.preventDefault();
+    setError("");
+    if (!form.customerName.trim() || !form.comment.trim())
+      return setError("Please enter your name and a comment.");
+    if (!form.rating)
+      return setError("Choose a rating to share your experience.");
+    if (!consent) return setError("Please agree to publish your review.");
+    setBusy(true);
+    try {
+      await api.post("/feedback/add", {
+        ...form,
+        customerName: form.customerName.trim(),
+        email: form.email.trim(),
+        comment: form.comment.trim(),
+      });
+      navigate("/feedback", {
+        state: { message: "Thank you! Your feedback has been published." },
+      });
+    } catch (err) {
+      setError(
+        apiError(err, "We could not publish your feedback. Please try again."),
+      );
+    } finally {
+      setBusy(false);
     }
-
-    const starLabel = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
-
-    return (
-        <div className="form-container" style={{ paddingTop: '1.5rem', paddingBottom: '2rem' }}>
-            <div className="feedback-form-card">
-                {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: '1.6rem' }}>
-                    <div style={{
-                        fontSize: '2.5rem', marginBottom: '0.5rem', lineHeight: 1
-                    }}>✍️</div>
-                    <h1 className="feedback-form-title">Share Your Experience</h1>
-                    <p className="feedback-form-subtitle">Your feedback helps us improve our products and services</p>
-                </div>
-
-                <form onSubmit={sendData}>
-                    {/* Name + Email */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                        <div className="form-group">
-                            <label htmlFor="CustomerName" className="form-label">Your Name</label>
-                            <input type="text" className="form-control" id="CustomerName"
-                                value={customerName} placeholder="Full name"
-                                onChange={(e) => setName(e.target.value)} required />
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="CustomerEmail" className="form-label">Email</label>
-                            <input type="email" className="form-control" id="CustomerEmail"
-                                value={email} placeholder="you@example.com"
-                                onChange={(e) => setEmail(e.target.value)} required />
-                        </div>
-                    </div>
-
-                    {/* Product */}
-                    <div className="form-group">
-                        <label htmlFor="productItem" className="form-label">Product</label>
-                        <select className="form-select" id="productItem"
-                            value={productItem}
-                            onChange={(e) => setProductItem(e.target.value)} required>
-                            <option value="">🥥 Select a product...</option>
-                            {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                    </div>
-
-                    {/* Star Rating */}
-                    <div className="form-group">
-                        <label className="form-label">Rating</label>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div className="star-rating">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                    <span
-                                        key={star}
-                                        onClick={() => setRating(star)}
-                                        onMouseEnter={() => setHoverRating(star)}
-                                        onMouseLeave={() => setHoverRating(0)}
-                                        style={{
-                                            cursor: 'pointer',
-                                            color: star <= (hoverRating || rating) ? '#f59e0b' : '#d1d5db',
-                                            fontSize: '2rem',
-                                            transition: 'transform 0.15s ease, color 0.15s ease',
-                                            transform: star <= (hoverRating || rating) ? 'scale(1.2)' : 'scale(1)',
-                                            display: 'inline-block',
-                                        }}
-                                    >★</span>
-                                ))}
-                            </div>
-                            {(hoverRating || rating) > 0 && (
-                                <span style={{ fontSize: '0.88rem', color: '#f59e0b', fontWeight: 600 }}>
-                                    {starLabel[hoverRating || rating]}
-                                </span>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Comment */}
-                    <div className="form-group">
-                        <label htmlFor="Comment" className="form-label">Your Comment</label>
-                        <textarea
-                            className="form-control" id="Comment"
-                            placeholder="Tell us about your experience with this product..."
-                            rows="4"
-                            onChange={(e) => setComment(e.target.value)}
-                            required
-                            style={{ resize: 'vertical', lineHeight: 1.6 }}
-                        />
-                    </div>
-
-                    {/* Consent */}
-                    <div className="form-check" style={{ marginBottom: '1.5rem' }}>
-                        <input type="checkbox" className="form-check-input" id="AgreeCheck"
-                            onChange={(e) => setIsChecked(e.target.checked)} />
-                        <label className="form-check-label" htmlFor="AgreeCheck">
-                            I agree that my review can be published on the website
-                        </label>
-                    </div>
-
-                    <button type="submit" className="signup-button" style={{ width: '100%', maxWidth: '100%' }}>
-                        🚀 Submit Feedback
-                    </button>
-                </form>
+  }
+  return (
+    <div className="page-container page-space">
+      <PageHeader
+        eyebrow="Customer connections"
+        title="Your experience matters."
+        description="Tell us what worked, what you loved, and where we can grow."
+      />
+      <div className="feedback-form-layout">
+        <section className="surface form-surface">
+          <div className="card-heading">
+            <span className="round-icon">
+              <FaRegCommentDots />
+            </span>
+            <div>
+              <h2>Share your feedback</h2>
+              <p>A few words can make a difference.</p>
             </div>
-        </div>
-    );
+          </div>
+          <Notice>{error}</Notice>
+          <form onSubmit={submit} aria-busy={busy}>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label" htmlFor="feedback-name">
+                  Your name
+                </label>
+                <input
+                  className="form-control"
+                  id="feedback-name"
+                  name="customerName"
+                  value={form.customerName}
+                  onChange={change}
+                  autoComplete="name"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="feedback-email">
+                  Email address
+                </label>
+                <input
+                  className="form-control"
+                  id="feedback-email"
+                  name="email"
+                  type="email"
+                  value={form.email}
+                  onChange={change}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="feedback-product">
+                Which product is your feedback about?
+              </label>
+              <select
+                className="form-select"
+                id="feedback-product"
+                name="productItem"
+                value={form.productItem}
+                onChange={change}
+                required
+              >
+                <option value="">Choose a product</option>
+                {PRODUCTS.map((p) => (
+                  <option key={p} value={p}>
+                    {productLabel(p)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Stars
+              value={form.rating}
+              onChange={(rating) => setForm({ ...form, rating })}
+            />
+            <div className="form-group">
+              <label className="form-label" htmlFor="feedback-comment">
+                Your feedback
+              </label>
+              <textarea
+                id="feedback-comment"
+                name="comment"
+                className="form-control"
+                value={form.comment}
+                onChange={change}
+                rows={5}
+                placeholder="Share your experience with this product…"
+                required
+              />
+              <p className="form-text">
+                Please keep your feedback helpful and avoid sharing sensitive
+                information.
+              </p>
+            </div>
+            <label className="check-label">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                required
+              />
+              I agree to have my name, rating, and feedback published on
+              CocoHub.
+            </label>
+            <div className="form-footer">
+              <Link to="/feedback" className="text-link">
+                Back to feedback
+              </Link>
+              <button className="btn btn-primary" disabled={busy}>
+                {busy ? (
+                  "Publishing…"
+                ) : (
+                  <>
+                    Publish feedback <FaArrowRight />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </section>
+        <aside className="feedback-guidance">
+          <p className="eyebrow">A little good to know</p>
+          <h2>
+            Honest feedback.
+            <br />
+            Better connections.
+          </h2>
+          <div>
+            <FaShieldAlt />
+            <h3>Your email stays masked</h3>
+            <p>
+              Public review cards only show a partially hidden email address.
+            </p>
+          </div>
+          <div>
+            <FaRegCommentDots />
+            <h3>You're in control</h3>
+            <p>
+              Use the same email to confirm an update or deletion of your
+              review.
+            </p>
+          </div>
+          <div>
+            <FaRegClock />
+            <h3>We'll handle the date</h3>
+            <p>Your feedback is dated automatically when you publish it.</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
 }
-
-export default AddFeedback;

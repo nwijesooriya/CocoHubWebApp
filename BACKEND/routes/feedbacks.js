@@ -1,123 +1,154 @@
-const router = require("express").Router();
-let feedback = require("../models/feedback");
+﻿const router = require("express").Router();
+const Feedback = require("../models/feedback");
 const nodemailer = require("nodemailer");
+const mongoose = require("mongoose");
 
-router.route("/add").post(async (req, res) => {
+const normalizeEmail = (value) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+const escapeHtml = (value) =>
+  String(value || "").replace(
+    /[&<>"']/g,
+    (char) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        char
+      ],
+  );
+
+router.post("/add", async (req, res) => {
+  try {
     const { customerName, email, comment, productItem, rating } = req.body;
-    const date = req.body.date ? new Date(req.body.date) : new Date();
-  
-    const newfeedback = new feedback({
-      customerName,
-      email,
-      comment,
+    const entry = new Feedback({
+      customerName: customerName?.trim(),
+      email: email?.trim(),
+      comment: comment?.trim(),
       productItem,
       rating,
-      date,
+      date: req.body.date ? new Date(req.body.date) : new Date(),
     });
-  
-    try {
-      await newfeedback.save();
-  
-      // Send Thank You Email
+    await entry.save();
+
+    // Email delivery is optional; a delivery failure must not undo a saved review.
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
       const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS
-        }
+        service: "gmail",
+        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
       });
-  
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: 'Thank You for Your Feedback! 🌴',
-        html: `
-          <h2>Hi ${customerName || 'Valued Customer'},</h2>
-          <p>Thank you for sharing your feedback about <b>${productItem}</b>.</p>
-          <p>Your opinion helps CocoHub to grow better! 🌟</p>
-          <br/>
-          <p>Best wishes,<br/>CocoHub Team 🥥</p>
-        `
-      };
-  
-      transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-          console.error("Failed to send Thank You email:", error);
-        } else {
-          console.log('Thank You email sent: ' + info.response);
-        }
-      });
-  
-      res.json("Feedback Added and Thank You Email Sent ✅");
-  
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to add feedback" });
+      transporter.sendMail(
+        {
+          from: process.env.EMAIL_USER,
+          to: email,
+          subject: "Thank you for your CocoHub feedback!",
+          html: `<h2>Hi ${escapeHtml(customerName)},</h2><p>Thank you for sharing your feedback about <b>${escapeHtml(productItem)}</b>.</p><p>Your opinion helps CocoHub grow better.</p><p>Best wishes,<br/>CocoHub Team</p>`,
+        },
+        (error) => {
+          if (error)
+            console.error(
+              "Feedback saved; thank-you email could not be delivered.",
+            );
+        },
+      );
     }
-  });
-  
-  // GET ALL FEEDBACKS
-  router.route("/").get((req, res) => {
-    feedback.find()
-      .then((feedbacks) => {
-        const formattedFeedbacks = feedbacks.map(fb => ({
-          ...fb._doc,
-          date: new Date(fb.date).toLocaleString("en-US", { timeZone: "Asia/Colombo" }),
-        }));
-        res.json(formattedFeedbacks);
-      })
-      .catch((err) => console.log(err));
-  });
-  
-  // UPDATE FEEDBACK
-  router.route("/update/:id").put(async (req, res) => {
-    let userID = req.params.id;
-    const { customerName, email, comment, productItem, rating } = req.body;
-  
-    const updateFeedback = {
-      customerName,
-      email,
-      comment,
-      productItem,
-      rating,
-      updatedAt: new Date()
-    };
-  
-    await feedback.findByIdAndUpdate(userID, updateFeedback)
-      .then(() => {
-        res.status(200).send({ status: "User Updated" });
-      })
-      .catch((err) => {
-        res.status(500).send({ status: "Error with Updating data", error: err.message });
+    res.json("Feedback Added");
+  } catch (error) {
+    res
+      .status(error.name === "ValidationError" ? 400 : 500)
+      .json({
+        error:
+          error.name === "ValidationError"
+            ? "Please provide a name, email, comment, product, and rating between 1 and 5."
+            : "Failed to add feedback",
       });
-  });
-  
-  // DELETE FEEDBACK
-  router.route("/delete/:id").delete(async (req, res) => {
-    let userID = req.params.id;
-  
-    await feedback.findByIdAndDelete(userID)
-      .then(() => {
-        res.status(200).send({ status: "user deleted" });
-      })
-      .catch((err) => {
-        console.log(err.message);
-        res.status(500).send({ status: "Error with delete user", error: err.message });
+  }
+});
+
+router.get("/", async (req, res) => {
+  try {
+    // Keep stored dates as ISO timestamps so the browser can format them reliably.
+    res.json(await Feedback.find());
+  } catch (error) {
+    res
+      .status(500)
+      .json({ error: "Unable to load feedback. Please try again." });
+  }
+});
+
+// Preserve email confirmation and enforce it on the server for both mutations.
+async function verifyOwner(req, res, next) {
+  if (!mongoose.isValidObjectId(req.params.id))
+    return res.status(400).json({ message: "Invalid feedback ID." });
+  const email = normalizeEmail(req.body?.email);
+  if (!email)
+    return res
+      .status(403)
+      .json({
+        message: "Enter the original email address to confirm this action.",
       });
-  });
-  
-  // GET FEEDBACK BY ID
-  router.route("/get/:id").get(async (req, res) => {
-    let userID = req.params.id;
-  
-    await feedback.findById(userID)
-      .then((feedback) => {
-        res.status(200).send({ status: "User Fetched", feedback });
-      })
-      .catch((err) => {
-        console.log(err.message);
-        res.status(500).send({ status: "Error with get user", error: err.message });
+  try {
+    const entry = await Feedback.findById(req.params.id);
+    if (!entry) return res.status(404).json({ message: "Feedback not found." });
+    if (normalizeEmail(entry.email) !== email)
+      return res
+        .status(403)
+        .json({ message: "Email does not match this feedback." });
+    req.feedbackEntry = entry;
+    next();
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Unable to verify feedback. Please try again." });
+  }
+}
+
+router.put("/update/:id", verifyOwner, async (req, res) => {
+  try {
+    const { customerName, comment, productItem, rating } = req.body;
+    const update = { updatedAt: new Date() };
+    // Partial edits retain the original name, product, and ownership email.
+    if (customerName !== undefined) update.customerName = customerName.trim();
+    if (comment !== undefined) update.comment = comment.trim();
+    if (productItem !== undefined) update.productItem = productItem;
+    if (rating !== undefined) update.rating = rating;
+    const updated = await Feedback.findByIdAndUpdate(req.params.id, update, {
+      new: true,
+      runValidators: true,
+    });
+    if (!updated)
+      return res.status(404).json({ message: "Feedback not found." });
+    res.status(200).json({ status: "User Updated" });
+  } catch (error) {
+    res
+      .status(error.name === "ValidationError" ? 400 : 500)
+      .json({
+        message:
+          error.name === "ValidationError"
+            ? "Provide a comment and a rating between 1 and 5."
+            : "Error updating feedback.",
       });
-  });
-  
-  module.exports = router;
+  }
+});
+
+router.delete("/delete/:id", verifyOwner, async (req, res) => {
+  try {
+    const deleted = await Feedback.findByIdAndDelete(req.params.id);
+    if (!deleted)
+      return res.status(404).json({ message: "Feedback not found." });
+    res.status(200).json({ status: "user deleted" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting feedback." });
+  }
+});
+
+router.get("/get/:id", async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id))
+    return res.status(400).json({ message: "Invalid feedback ID." });
+  try {
+    const feedback = await Feedback.findById(req.params.id);
+    if (!feedback)
+      return res.status(404).json({ message: "Feedback not found." });
+    res.status(200).json({ status: "User Fetched", feedback });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching feedback." });
+  }
+});
+
+module.exports = router;

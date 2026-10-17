@@ -1,404 +1,513 @@
-import React, { useState, useEffect } from 'react';
-import axios from "axios";
-import '../App.css';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import autoTable from 'jspdf-autotable';
+import React, { useEffect, useState, useCallback } from "react";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
+import {
+  FaArrowRight,
+  FaSearch,
+  FaThLarge,
+  FaList,
+  FaPen,
+  FaTrashAlt,
+  FaDownload,
+  FaChartBar,
+  FaComments,
+} from "react-icons/fa";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import api, { apiError } from "../api";
+import {
+  PageHeader,
+  Notice,
+  Loading,
+  Stars,
+  initials,
+  maskEmail,
+  formatDate,
+} from "./UI";
+import { productLabel } from "./AddFeedback";
 
-function ViewFeedback() {
-    const [feedbacks, setFeedback]       = useState([]);
-    const [editingId, setEditingId]      = useState(null);
-    const [deletingId, setDeletingId]    = useState(null);
-    const [actionEmail, setActionEmail]  = useState('');
-    const [editComment, setEditComment]  = useState('');
-    const [editRating, setEditRating]    = useState(0);
-    const [hoverRating, setHoverRating]  = useState(0);
-    const [error, setError]              = useState('');
-    const [searchTerm, setSearchTerm]    = useState('');
-    const [viewMode, setViewMode]        = useState('card'); // 'card' | 'table'
+// Defined outside ViewFeedback so typing never remounts the form or loses focus.
+function FeedbackAction({ feedback, action, onCancel, onSaved, onDeleted }) {
+  const [email, setEmail] = useState("");
+  const [verified, setVerified] = useState(false);
+  const [comment, setComment] = useState(feedback.comment);
+  const [rating, setRating] = useState(feedback.rating);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-    const userRole = localStorage.getItem("userRole");
-
-    useEffect(() => { fetchFeedbacks(); }, []);
-
-    const fetchFeedbacks = () => {
-        axios.get("http://localhost:8000/feedback/")
-            .then((res) => {
-                const sorted = res.data.sort((a, b) => new Date(b.date) - new Date(a.date));
-                setFeedback(sorted);
-            })
-            .catch((err) => console.error(err));
-    };
-
-    const handleActionClick = (feedback, actionType) => {
-        setEditingId(actionType === 'edit' ? feedback._id : null);
-        setDeletingId(actionType === 'delete' ? feedback._id : null);
-        setEditComment(actionType === 'edit' ? feedback.comment : '');
-        setEditRating(actionType === 'edit' ? feedback.rating : 0);
-        setActionEmail('');
-        setError('');
-    };
-
-    const verifyEmail = (feedbackId) => {
-        const fb = feedbacks.find(f => f._id === feedbackId);
-        if (!fb) { setError("Feedback not found."); return false; }
-        if (actionEmail !== fb.email) {
-            setError("Email does not match. Please enter the email used for this feedback.");
-            return false;
-        }
-        return true;
-    };
-
-    const handleSave = async (feedbackId) => {
-        if (!verifyEmail(feedbackId)) return;
-        try {
-            const res = await axios.put(
-                `http://localhost:8000/feedback/update/${feedbackId}`,
-                { email: actionEmail, comment: editComment, rating: editRating }
-            );
-            if (res.status === 200) {
-                setFeedback(feedbacks.map(fb =>
-                    fb._id === feedbackId ? { ...fb, comment: editComment, rating: editRating } : fb
-                ));
-                cancelActions();
-            }
-        } catch { setError("Error updating feedback. Please try again."); }
-    };
-
-    const handleDelete = async (feedbackId) => {
-        if (!verifyEmail(feedbackId)) return;
-        try {
-            const res = await axios.delete(`http://localhost:8000/feedback/delete/${feedbackId}`);
-            if (res.status === 200) { fetchFeedbacks(); cancelActions(); }
-        } catch { setError("Error deleting feedback. Please try again."); }
-    };
-
-    const cancelActions = () => {
-        setEditingId(null); setDeletingId(null);
-        setActionEmail(''); setError('');
-    };
-
-    const maskEmail = (email) => {
-        const [name, domain] = email.split("@");
-        return `${name.slice(0, 3)}***@${domain}`;
-    };
-
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '-';
-        return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    };
-
-    const getInitials = (name) => {
-        if (!name) return '?';
-        return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    };
-
-    const generatePDF = () => {
-        const doc = new jsPDF();
-        doc.setFontSize(18);
-        doc.text('Customer Feedback Report', 14, 22);
-        const cols = ["Name", "Email", "Date", "Rating", "Comment"];
-        const rows = feedbacks.map(fb => [
-            fb.customerName || "Anonymous",
-            fb.email || "N/A",
-            new Date(fb.date).toLocaleDateString(),
-            fb.rating || "-",
-            fb.comment
-        ]);
-        autoTable(doc, { head: [cols], body: rows, startY: 30, styles: { fontSize: 10 } });
-        doc.save('Feedback_Report.pdf');
-    };
-
-    const displayList = searchTerm
-        ? [...feedbacks].filter(fb =>
-            (fb.customerName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-            (fb.productItem?.toLowerCase().includes(searchTerm.toLowerCase()))
-          ).sort((a, b) => new Date(b.date) - new Date(a.date))
-        : feedbacks;
-
-    /* ── Star helper ── */
-    const Stars = ({ count, interactive = false, onRate, onHover, onLeave, hover }) => (
-        <span style={{ fontSize: interactive ? '1.4rem' : '1.05rem', letterSpacing: 1 }}>
-            {[1,2,3,4,5].map(s => (
-                <span
-                    key={s}
-                    style={{
-                        cursor: interactive ? 'pointer' : 'default',
-                        color: s <= (hover || count) ? '#f59e0b' : '#d1d5db',
-                        transition: 'transform 0.12s ease',
-                        display: 'inline-block',
-                        transform: interactive && s <= (hover || count) ? 'scale(1.2)' : 'scale(1)',
-                    }}
-                    onClick={() => interactive && onRate && onRate(s)}
-                    onMouseEnter={() => interactive && onHover && onHover(s)}
-                    onMouseLeave={() => interactive && onLeave && onLeave(0)}
-                >★</span>
-            ))}
-        </span>
-    );
-
-    /* ── Action Block (shared card/table) ── */
-    const ActionBlock = ({ feedback }) => (
-        <div style={{
-            marginTop: '0.75rem',
-            padding: '0.85rem',
-            background: 'rgba(5,150,105,0.05)',
-            borderRadius: 8,
-            border: '1px solid rgba(5,150,105,0.12)',
-        }}>
-            {error && editingId === feedback._id || error && deletingId === feedback._id
-                ? <p style={{ color: '#ef4444', fontSize: '0.82rem', marginBottom: '0.5rem' }}>{error}</p>
-                : null
-            }
-            <input
-                type="email"
-                placeholder="Enter your email to confirm"
-                className="email-input"
-                value={actionEmail}
-                onChange={(e) => setActionEmail(e.target.value)}
-                style={{ marginBottom: '0.6rem' }}
-            />
-            {editingId === feedback._id && (
-                <>
-                    <textarea
-                        className="comment-edit"
-                        value={editComment}
-                        onChange={(e) => setEditComment(e.target.value)}
-                        style={{ marginBottom: '0.6rem' }}
-                    />
-                    <div style={{ marginBottom: '0.6rem' }}>
-                        <Stars
-                            count={editRating} interactive
-                            onRate={setEditRating}
-                            onHover={setHoverRating}
-                            onLeave={setHoverRating}
-                            hover={hoverRating}
-                        />
-                    </div>
-                </>
-            )}
-            <div className="action-buttons">
-                {editingId === feedback._id
-                    ? <button className="save-button" onClick={() => handleSave(feedback._id)}>✔ Save</button>
-                    : <button className="delete-button" onClick={() => handleDelete(feedback._id)}>🗑 Confirm Delete</button>
-                }
-                <button className="cancel-button" onClick={cancelActions}>✕ Cancel</button>
-            </div>
-        </div>
-    );
-
-    return (
-        <div className="feedback-container">
-            <h1 className="feedback-title">🥥 Customer Feedbacks</h1>
-
-            {/* Top Controls */}
-            <div className="feedback-topbar">
-                {/* View Toggle */}
-                <div className="view-toggle">
-                    <button
-                        id="card-view-btn"
-                        className={`view-toggle-btn${viewMode === 'card' ? ' active' : ''}`}
-                        onClick={() => setViewMode('card')}
-                    >
-                        ⊞ Cards
-                    </button>
-                    <button
-                        id="table-view-btn"
-                        className={`view-toggle-btn${viewMode === 'table' ? ' active' : ''}`}
-                        onClick={() => setViewMode('table')}
-                    >
-                        ≡ Table
-                    </button>
-                </div>
-
-                {/* Search */}
-                <div className="search-bar1">
-                    <input
-                        type="text"
-                        placeholder="Search by name or product…"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-            </div>
-
-            {/* Global error */}
-            {error && !editingId && !deletingId && (
-                <div className="error-message">{error}</div>
-            )}
-
-            {/* ═══════════ CARD VIEW ═══════════ */}
-            {viewMode === 'card' && (
-                <div className="feedback-grid">
-                    {displayList.length === 0 && (
-                        <div className="no-feedback" style={{ gridColumn: '1 / -1' }}>
-                            {feedbacks.length === 0 ? '📭 No feedbacks yet.' : '🔍 No results match your search.'}
-                        </div>
-                    )}
-
-                    {displayList.map((feedback) => (
-                        <div className="feedback-card" key={feedback._id}>
-                            {/* Card Header */}
-                            <div className="feedback-header">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1 }}>
-                                    <div className="customer-avatar">{getInitials(feedback.customerName)}</div>
-                                    <div>
-                                        <div className="customer-name">{feedback.customerName || 'Anonymous'}</div>
-                                        {feedback.email && (
-                                            <div className="email">{maskEmail(feedback.email)}</div>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="feedback-right">
-                                    <span className="feedback-date">{formatDate(feedback.date)}</span>
-                                    {feedback.rating > 0 && (
-                                        <Stars count={feedback.rating} />
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Action form (edit/delete) */}
-                            {(editingId === feedback._id || deletingId === feedback._id) ? (
-                                <ActionBlock feedback={feedback} />
-                            ) : (
-                                <>
-                                    {feedback.productItem && (
-                                        <div className="product-item">🥥 {feedback.productItem}</div>
-                                    )}
-                                    <div className="feedback-comment">{feedback.comment}</div>
-                                    <div className="action-controls">
-                                        <button className="update-button" onClick={() => handleActionClick(feedback, 'edit')}>
-                                            ✏️ Edit
-                                        </button>
-                                        <button className="delete-button" onClick={() => handleActionClick(feedback, 'delete')}>
-                                            🗑 Delete
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* ═══════════ TABLE VIEW ═══════════ */}
-            {viewMode === 'table' && (
-                <div className="feedback-table-wrapper">
-                    <table className="feedback-table">
-                        <thead>
-                            <tr>
-                                <th style={{ width: '14%' }}>Customer</th>
-                                <th style={{ width: '14%' }}>Email</th>
-                                <th style={{ width: '14%' }}>Product</th>
-                                <th style={{ width: '10%' }}>Rating</th>
-                                <th style={{ width: '28%' }}>Comment</th>
-                                <th style={{ width: '10%' }}>Date</th>
-                                <th style={{ width: '10%' }}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {displayList.length === 0 ? (
-                                <tr>
-                                    <td colSpan="7" className="no-feedback">
-                                        {feedbacks.length === 0 ? '📭 No feedbacks yet.' : '🔍 No results match your search.'}
-                                    </td>
-                                </tr>
-                            ) : displayList.map((feedback) => (
-                                <React.Fragment key={feedback._id}>
-                                    <tr>
-                                        <td className="table-cell-customer">
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <div style={{
-                                                    width: 30, height: 30, borderRadius: '50%',
-                                                    background: 'linear-gradient(135deg,#047857,#10b981)',
-                                                    color: '#fff', display: 'flex', alignItems: 'center',
-                                                    justifyContent: 'center', fontSize: '0.7rem',
-                                                    fontWeight: 700, flexShrink: 0
-                                                }}>{getInitials(feedback.customerName)}</div>
-                                                {feedback.customerName || 'Anonymous'}
-                                            </div>
-                                        </td>
-                                        <td className="table-cell-email">
-                                            {feedback.email ? maskEmail(feedback.email) : '-'}
-                                        </td>
-                                        <td className="table-cell-product">
-                                            {feedback.productItem
-                                                ? <span className="product-item" style={{ fontSize: '0.78rem' }}>🥥 {feedback.productItem}</span>
-                                                : '-'
-                                            }
-                                        </td>
-                                        <td className="table-cell-rating">
-                                            {feedback.rating > 0
-                                                ? <Stars count={feedback.rating} />
-                                                : '-'
-                                            }
-                                        </td>
-                                        <td className="table-cell-comment">
-                                            {editingId === feedback._id
-                                                ? <textarea
-                                                    className="comment-edit-table"
-                                                    value={editComment}
-                                                    onChange={(e) => setEditComment(e.target.value)}
-                                                  />
-                                                : feedback.comment
-                                            }
-                                        </td>
-                                        <td className="table-cell-date">{formatDate(feedback.date)}</td>
-                                        <td className="table-cell-actions">
-                                            {(editingId === feedback._id || deletingId === feedback._id) ? (
-                                                <div className="table-action-buttons">
-                                                    <input
-                                                        type="email"
-                                                        placeholder="Email…"
-                                                        className="email-input-table"
-                                                        value={actionEmail}
-                                                        onChange={(e) => setActionEmail(e.target.value)}
-                                                        style={{ marginBottom: 4 }}
-                                                    />
-                                                    {editingId === feedback._id && (
-                                                        <Stars
-                                                            count={editRating} interactive
-                                                            onRate={setEditRating}
-                                                            onHover={setHoverRating}
-                                                            onLeave={setHoverRating}
-                                                            hover={hoverRating}
-                                                        />
-                                                    )}
-                                                    {editingId === feedback._id
-                                                        ? <button className="save-button" style={{ fontSize: '0.78rem', padding: '4px 10px' }} onClick={() => handleSave(feedback._id)}>✔ Save</button>
-                                                        : <button className="delete-button" style={{ fontSize: '0.78rem', padding: '4px 10px' }} onClick={() => handleDelete(feedback._id)}>🗑 Delete</button>
-                                                    }
-                                                    <button className="cancel-button" style={{ fontSize: '0.78rem', padding: '4px 10px' }} onClick={cancelActions}>✕</button>
-                                                    {error && <p style={{ color: '#ef4444', fontSize: '0.75rem', width: '100%' }}>{error}</p>}
-                                                </div>
-                                            ) : (
-                                                <div className="table-action-buttons">
-                                                    <button className="update-button" style={{ fontSize: '0.78rem', padding: '4px 10px' }} onClick={() => handleActionClick(feedback, 'edit')}>✏️ Edit</button>
-                                                    <button className="delete-button" style={{ fontSize: '0.78rem', padding: '4px 10px' }} onClick={() => handleActionClick(feedback, 'delete')}>🗑</button>
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                </React.Fragment>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            {/* Admin/Manager buttons */}
-            {(userRole === "Admin" || userRole === "Manager") && (
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.4rem', flexWrap: 'wrap' }}>
-                    <button className="report-button" onClick={generatePDF}>
-                        📄 Generate PDF Report
-                    </button>
-                    <button className="analyticsbtn" onClick={() => window.location.href = "/feedback-analytics"}>
-                        📊 View Analytics
-                    </button>
-                </div>
-            )}
-        </div>
-    );
+  function verify(e) {
+    e.preventDefault();
+    if (email.trim().toLowerCase() !== feedback.email?.trim().toLowerCase()) {
+      setError(
+        "That email does not match this review. Use the email you originally submitted.",
+      );
+      return;
+    }
+    setError("");
+    setVerified(true);
+  }
+  async function confirm(e) {
+    e.preventDefault();
+    setError("");
+    if (action === "edit" && !comment.trim())
+      return setError("Please add a comment before saving.");
+    setBusy(true);
+    try {
+      if (action === "edit") {
+        await api.put(`/feedback/update/${feedback._id}`, {
+          email: email.trim(),
+          comment: comment.trim(),
+          rating,
+        });
+        onSaved({
+          ...feedback,
+          comment: comment.trim(),
+          rating,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        await api.delete(`/feedback/delete/${feedback._id}`, {
+          data: { email: email.trim() },
+        });
+        onDeleted(feedback._id);
+      }
+    } catch (err) {
+      setError(
+        apiError(
+          err,
+          `We could not ${action === "edit" ? "update" : "delete"} this feedback. Please try again.`,
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  const id = `action-${feedback._id}`;
+  return (
+    <section
+      className={`feedback-action ${action === "delete" ? "danger-panel" : ""}`}
+      aria-label={`${action === "edit" ? "Update" : "Delete"} feedback by ${feedback.customerName}`}
+    >
+      <h3>
+        {verified
+          ? action === "edit"
+            ? "Make it yours, again."
+            : "Delete this feedback?"
+          : "First, confirm your email"}
+      </h3>
+      <p>
+        {verified
+          ? action === "edit"
+            ? "Update your comment and rating below."
+            : "This permanently removes your review. This action cannot be undone."
+          : "Enter the email you used to publish this review."}
+      </p>
+      <Notice>{error}</Notice>
+      {!verified ? (
+        <form onSubmit={verify}>
+          <label className="form-label" htmlFor={`${id}-email`}>
+            Original email address
+          </label>
+          <input
+            autoFocus
+            type="email"
+            id={`${id}-email`}
+            className="form-control"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <div className="button-row">
+            <button className="btn btn-primary btn-small">
+              Confirm email <FaArrowRight />
+            </button>
+            <button
+              className="btn btn-secondary btn-small"
+              type="button"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <form onSubmit={confirm} aria-busy={busy}>
+          {action === "edit" && (
+            <>
+              <label className="form-label" htmlFor={`${id}-comment`}>
+                Your feedback
+              </label>
+              <textarea
+                autoFocus
+                id={`${id}-comment`}
+                className="form-control"
+                rows={4}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                required
+              />
+              <Stars value={rating} onChange={setRating} id={id} />
+            </>
+          )}
+          <div className="button-row">
+            <button
+              className={`btn ${action === "delete" ? "btn-danger" : "btn-primary"} btn-small`}
+              disabled={busy}
+            >
+              {busy
+                ? "Working…"
+                : action === "edit"
+                  ? "Save changes"
+                  : "Yes, delete feedback"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-small"
+              disabled={busy}
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </section>
+  );
 }
 
-export default ViewFeedback;
+export default function ViewFeedback() {
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState("");
+  const [view, setView] = useState("card");
+  const [params, setParams] = useSearchParams();
+  const location = useLocation();
+  const product = params.get("product") || "";
+  const role = localStorage.getItem("userRole");
+  const fetchFeedback = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await api.get("/feedback/");
+      setFeedbacks(
+        [...response.data].sort((a, b) => new Date(b.date) - new Date(a.date)),
+      );
+    } catch (err) {
+      setError(
+        apiError(
+          err,
+          "Feedback could not be loaded. Please check the server and try again.",
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    fetchFeedback();
+  }, [fetchFeedback]);
+  const filtered = feedbacks.filter(
+    (f) =>
+      (!product || f.productItem === product) &&
+      (!search.trim() ||
+        `${f.customerName || ""} ${f.productItem || ""}`
+          .toLowerCase()
+          .includes(search.trim().toLowerCase())),
+  );
+  const average = feedbacks.length
+    ? (
+        feedbacks.reduce((sum, f) => sum + (Number(f.rating) || 0), 0) /
+        feedbacks.length
+      ).toFixed(1)
+    : "—";
+
+  function saved(updated) {
+    setFeedbacks((previous) =>
+      previous.map((f) => (f._id === updated._id ? updated : f)),
+    );
+    setSelected(null);
+    setMessage("Your feedback has been updated.");
+  }
+  function deleted(id) {
+    setFeedbacks((previous) => previous.filter((f) => f._id !== id));
+    setSelected(null);
+    setMessage("Your feedback has been deleted.");
+  }
+  const actions = (feedback) => (
+    <div className="card-actions">
+      <button
+        className="action-link"
+        onClick={() => {
+          setMessage("");
+          setSelected({ id: feedback._id, type: "edit" });
+        }}
+        aria-label={`Update feedback by ${feedback.customerName}`}
+      >
+        <FaPen /> Update
+      </button>
+      <button
+        className="action-link danger-text"
+        onClick={() => {
+          setMessage("");
+          setSelected({ id: feedback._id, type: "delete" });
+        }}
+        aria-label={`Delete feedback by ${feedback.customerName}`}
+      >
+        <FaTrashAlt /> Delete
+      </button>
+    </div>
+  );
+  const editor = (feedback) =>
+    selected?.id === feedback._id ? (
+      <FeedbackAction
+        key={`${feedback._id}-${selected.type}`}
+        feedback={feedback}
+        action={selected.type}
+        onCancel={() => setSelected(null)}
+        onSaved={saved}
+        onDeleted={deleted}
+      />
+    ) : null;
+  function exportPDF() {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("CocoHub | Customer Feedback", 14, 22);
+    autoTable(doc, {
+      head: [["Name", "Email", "Product", "Date", "Rating", "Comment"]],
+      body: filtered.map((f) => [
+        f.customerName,
+        maskEmail(f.email),
+        productLabel(f.productItem),
+        formatDate(f.date),
+        `${f.rating}/5`,
+        f.comment,
+      ]),
+      startY: 30,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [30, 76, 56] },
+    });
+    doc.save("Feedback_Report.pdf");
+  }
+
+  return (
+    <div className="page-container page-space">
+      <PageHeader
+        eyebrow="The CocoHub community"
+        title="Every voice helps us grow."
+        description="Real experiences with our products, shared by people like you."
+      >
+        <Link to="/add" className="btn btn-primary">
+          Write a review <FaArrowRight />
+        </Link>
+      </PageHeader>
+      <Notice type="success">{message || location.state?.message}</Notice>
+      {loading ? (
+        <Loading text="Gathering community feedback…" />
+      ) : error ? (
+        <div className="surface empty-state">
+          <Notice>{error}</Notice>
+          <button className="btn btn-secondary" onClick={fetchFeedback}>
+            Try again
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="feedback-summary">
+            <div>
+              <strong>{feedbacks.length}</strong>
+              <span>
+                Community {feedbacks.length === 1 ? "review" : "reviews"}
+              </span>
+            </div>
+            <div>
+              <strong>
+                {average}
+                <small> / 5</small>
+              </strong>
+              <Stars value={Math.round(Number(average) || 0)} />
+              <span>Average rating</span>
+            </div>
+            <div className="summary-note">
+              <FaComments />
+              <p>
+                A better CocoHub
+                <br />
+                starts with your feedback.
+              </p>
+            </div>
+          </div>
+          <div className="feedback-toolbar">
+            <div className="search-field">
+              <FaSearch aria-hidden="true" />
+              <label className="visually-hidden" htmlFor="feedback-search">
+                Search feedback by customer name or product
+              </label>
+              <input
+                id="feedback-search"
+                type="search"
+                placeholder="Search by name or product…"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setSelected(null);
+                }}
+              />
+            </div>
+            <div className="view-toggle" aria-label="Feedback display">
+              <button
+                aria-label="Card view"
+                aria-pressed={view === "card"}
+                className={view === "card" ? "active" : ""}
+                onClick={() => setView("card")}
+              >
+                <FaThLarge /> Cards
+              </button>
+              <button
+                aria-label="Table view"
+                aria-pressed={view === "table"}
+                className={view === "table" ? "active" : ""}
+                onClick={() => setView("table")}
+              >
+                <FaList /> Table
+              </button>
+            </div>
+          </div>
+          <div className="results-line">
+            <span aria-live="polite">
+              {filtered.length} {filtered.length === 1 ? "review" : "reviews"}
+              {product ? ` for ${productLabel(product)}` : ""}
+            </span>
+            {(search || product) && (
+              <button
+                className="action-link"
+                onClick={() => {
+                  setSearch("");
+                  setParams({});
+                  setSelected(null);
+                }}
+              >
+                Clear filters
+              </button>
+            )}
+            <span>Newest first</span>
+          </div>
+          {!filtered.length ? (
+            <div className="surface empty-state">
+              <FaComments />
+              <h2>
+                {feedbacks.length
+                  ? "No matching reviews."
+                  : "The conversation starts with you."}
+              </h2>
+              <p>
+                {feedbacks.length
+                  ? "Try a different name or product, or clear your filters."
+                  : "Be the first to share your experience with CocoHub."}
+              </p>
+              {!feedbacks.length && (
+                <Link to="/add" className="btn btn-primary">
+                  Write the first review
+                </Link>
+              )}
+            </div>
+          ) : view === "card" ? (
+            <div className="feedback-grid">
+              {filtered.map((feedback) => (
+                <article className="feedback-card" key={feedback._id}>
+                  <div className="feedback-card-top">
+                    <span className="product-tag">
+                      {productLabel(feedback.productItem)}
+                    </span>
+                    <Stars value={feedback.rating} />
+                  </div>
+                  <p className="review-comment">{feedback.comment}</p>
+                  <div className="customer-line">
+                    <span className="customer-avatar">
+                      {initials(feedback.customerName)}
+                    </span>
+                    <div>
+                      <h2>{feedback.customerName}</h2>
+                      <span>{maskEmail(feedback.email)}</span>
+                    </div>
+                  </div>
+                  <div className="feedback-card-footer">
+                    <time>
+                      {formatDate(feedback.date)}
+                      {feedback.updatedAt && <small> · Edited</small>}
+                    </time>
+                    {actions(feedback)}
+                  </div>
+                  {editor(feedback)}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="table-scroll">
+              <table className="feedback-table">
+                <caption className="visually-hidden">
+                  Customer feedback, newest first
+                </caption>
+                <thead>
+                  <tr>
+                    {[
+                      "Customer",
+                      "Product",
+                      "Rating",
+                      "Feedback",
+                      "Date",
+                      "Actions",
+                    ].map((h) => (
+                      <th scope="col" key={h}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((feedback) => (
+                    <React.Fragment key={feedback._id}>
+                      <tr>
+                        <td>
+                          <strong>{feedback.customerName}</strong>
+                          <small>{maskEmail(feedback.email)}</small>
+                        </td>
+                        <td>{productLabel(feedback.productItem)}</td>
+                        <td>
+                          <Stars value={feedback.rating} />
+                        </td>
+                        <td className="table-comment">{feedback.comment}</td>
+                        <td>{formatDate(feedback.date)}</td>
+                        <td>{actions(feedback)}</td>
+                      </tr>
+                      {selected?.id === feedback._id && (
+                        <tr>
+                          <td colSpan={6}>{editor(feedback)}</td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {(role === "Admin" || role === "Manager") && (
+            <div className="button-row report-actions">
+              <button
+                className="btn btn-secondary"
+                onClick={exportPDF}
+                disabled={!filtered.length}
+              >
+                <FaDownload /> Export PDF report
+              </button>
+              <Link className="btn btn-secondary" to="/feedback-analytics">
+                <FaChartBar /> Feedback analytics
+              </Link>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
